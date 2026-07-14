@@ -6,6 +6,9 @@ Subcommands:
                       notification. (This is what the launchd agent runs hourly.)
   session [--id ID]   Run the guided, visual-countdown session for the pending
                       exercise (or a specific one). Clicking the notification runs this.
+  now                 Feeling sedentary? Do the next exercise right now (guided,
+                      in this terminal). Completing any exercise suppresses the
+                      next scheduled nudge if it lands within min_gap_minutes.
   next                Show what's next in the rotation without advancing it.
   list                List every exercise in the rotation.
   stats               Today's tally, current streak, and lifetime total.
@@ -108,6 +111,29 @@ def read_log() -> list[dict]:
         return []
 
 
+def last_completed_at(rows: list[dict]) -> dt.datetime | None:
+    times = [
+        r["timestamp"]
+        for r in rows
+        if r.get("event") == "completed" and r.get("timestamp")
+    ]
+    if not times:
+        return None
+    try:
+        return max(dt.datetime.fromisoformat(t) for t in times)
+    except ValueError:
+        return None
+
+
+def should_skip_notify(rows: list[dict], now: dt.datetime, minutes: int) -> bool:
+    """True if an exercise was completed within `minutes` before `now` — so a
+    scheduled nudge would be redundant (you just moved)."""
+    last = last_completed_at(rows)
+    if last is None:
+        return False
+    return (now - last) < dt.timedelta(minutes=minutes)
+
+
 # ---------------------------------------------------------------------------
 # Rotation
 # ---------------------------------------------------------------------------
@@ -167,6 +193,15 @@ def terminal_notifier_path() -> str | None:
 
 def cmd_notify(args) -> int:
     exercises = load_exercises()
+    cfg = load_config()
+
+    # Don't nudge if you've already moved recently (manual `now`, or a
+    # notification you got to late). Don't advance the rotation either.
+    gap = cfg.get("min_gap_minutes", 15)
+    if should_skip_notify(read_log(), dt.datetime.now(), gap):
+        log_event("auto_skipped", {"name": f"(moved <{gap}m ago — nudge skipped)"})
+        return 0
+
     state = read_state()
     idx = state.get("index", 0) % len(exercises)
     ex = exercises[idx]
@@ -177,7 +212,6 @@ def cmd_notify(args) -> int:
     write_state(state)
     log_event("prompted", ex)
 
-    cfg = load_config()
     tn = terminal_notifier_path()
     launcher = os.path.join(SCRIPT_DIR, "bin", "launch-session")
 
@@ -354,6 +388,20 @@ def cmd_session(args) -> int:
     return 0
 
 
+def cmd_now(args) -> int:
+    """Do the next exercise right now, in this terminal. Completing it makes the
+    next scheduled nudge self-skip (see should_skip_notify)."""
+    exercises = load_exercises()
+    state = read_state()
+    idx = state.get("index", 0) % len(exercises)
+    ex = exercises[idx]
+    state["index"] = (idx + 1) % len(exercises)
+    state["pending"] = ex["id"]
+    write_state(state)
+    run_session(ex)
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # next / list / done / stats / recent
 # ---------------------------------------------------------------------------
@@ -475,6 +523,42 @@ def build_plist() -> dict:
     }
 
 
+SHIM_DIR = os.path.expanduser("~/.local/bin")
+SHIMS = {
+    # command name -> extra args appended after the script path
+    "deskercise": "",
+    "desknow": " now",  # shortcut: do the next exercise right now
+}
+
+
+def install_shims() -> list[str]:
+    """Put `deskercise` and `desknow` on PATH via small shim scripts."""
+    os.makedirs(SHIM_DIR, exist_ok=True)
+    script = os.path.join(SCRIPT_DIR, "deskercise.py")
+    created = []
+    for name, suffix in SHIMS.items():
+        path = os.path.join(SHIM_DIR, name)
+        with open(path, "w") as f:
+            f.write(f'#!/bin/bash\nexec python3 "{script}"{suffix} "$@"\n')
+        os.chmod(path, 0o755)
+        created.append(path)
+    return created
+
+
+def remove_shims() -> None:
+    for name in SHIMS:
+        path = os.path.join(SHIM_DIR, name)
+        # Only remove our own shims, not an unrelated file of the same name.
+        if os.path.isfile(path):
+            try:
+                with open(path) as f:
+                    body = f.read()
+            except OSError:
+                continue
+            if "deskercise.py" in body:
+                os.remove(path)
+
+
 def cmd_install(args) -> int:
     if terminal_notifier_path() is None:
         print(
@@ -511,11 +595,27 @@ def cmd_install(args) -> int:
             return 1
 
     cfg = load_config()
+    minute = cfg.get("minute", 0)
     print(f"{C.GREEN}✓ agent loaded.{C.RESET}")
     print(
-        f"  schedule: {cfg['hours'][0]}:00–{cfg['hours'][-1]:02d}:00, "
-        f"top of each hour, weekdays.\n"
+        f"  schedule: {cfg['hours'][0]}:{minute:02d}–{cfg['hours'][-1]}:{minute:02d}, "
+        f"hourly, weekdays.\n"
     )
+
+    shims = install_shims()
+    print(f"{C.GREEN}✓ shell commands installed:{C.RESET} " + ", ".join(SHIMS))
+    for p in shims:
+        print(f"    {C.DIM}{p}{C.RESET}")
+    if SHIM_DIR not in os.environ.get("PATH", "").split(os.pathsep):
+        print(
+            f"  {C.YELLOW}note:{C.RESET} {SHIM_DIR} isn't on your PATH. Add this to your shell rc:\n"
+            f'    {C.CYAN}export PATH="{SHIM_DIR}:$PATH"{C.RESET}'
+        )
+    print(
+        f"  {C.DIM}desknow{C.RESET} = do the next exercise now · "
+        f"{C.DIM}deskercise <cmd>{C.RESET} = full CLI\n"
+    )
+
     print(f"{C.BOLD}One-time macOS setup so these are hard to ignore:{C.RESET}")
     print("  System Settings → Notifications → terminal-notifier")
     print("    • Allow Notifications: ON")
@@ -535,6 +635,8 @@ def cmd_uninstall(args) -> int:
     if os.path.exists(plist_path()):
         os.remove(plist_path())
         print(f"removed {plist_path()}")
+    remove_shims()
+    print(f"removed shell commands: {', '.join(SHIMS)}")
     print(f"{C.GREEN}✓ agent unloaded.{C.RESET} (Your log in {state_dir()} was kept.)")
     return 0
 
@@ -603,6 +705,7 @@ def main() -> int:
     sp.add_argument(
         "--id", help="specific exercise id (default: pending from last notify)"
     )
+    sub.add_parser("now")
     sub.add_parser("next")
     sub.add_parser("list")
     dp = sub.add_parser("done")
@@ -618,6 +721,7 @@ def main() -> int:
     handlers = {
         "notify": cmd_notify,
         "session": cmd_session,
+        "now": cmd_now,
         "next": cmd_next,
         "list": cmd_list,
         "done": cmd_done,

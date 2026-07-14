@@ -149,9 +149,11 @@ def test_next_fire_returns_requested_count_in_order():
 
 
 def _isolate_state(tmp_path, monkeypatch):
-    """Point state/log at a temp dir and stub out the actual notification."""
+    """Point state/log at a temp dir and record (instead of firing) notifications."""
     monkeypatch.setattr(d, "state_dir", lambda: str(tmp_path))
-    monkeypatch.setattr(d.subprocess, "run", lambda *a, **k: None)
+    calls = []
+    monkeypatch.setattr(d.subprocess, "run", lambda *a, **k: calls.append(a))
+    return calls
 
 
 def test_rotation_advances_and_sets_pending(tmp_path, monkeypatch):
@@ -178,3 +180,76 @@ def test_rotation_wraps_at_end(tmp_path, monkeypatch):
     st = d.read_state()
     assert st["index"] == 0
     assert st["pending"] == exercises[-1]["id"]
+
+
+# --- skip-if-recently-moved (should_skip_notify + cmd_notify integration) ----
+
+
+def _row(event, when):
+    return {"event": event, "timestamp": when.isoformat(timespec="seconds")}
+
+
+def test_should_skip_true_when_completed_recently():
+    now = dt.datetime(2026, 7, 14, 13, 10)  # a 1:10 scheduled fire
+    rows = [_row("completed", now - dt.timedelta(minutes=5))]  # did one at 1:05
+    assert d.should_skip_notify(rows, now, 15) is True
+
+
+def test_should_skip_false_when_completion_is_old():
+    now = dt.datetime(2026, 7, 14, 13, 10)
+    rows = [_row("completed", now - dt.timedelta(minutes=20))]
+    assert d.should_skip_notify(rows, now, 15) is False
+
+
+def test_should_skip_false_without_any_completion():
+    now = dt.datetime(2026, 7, 14, 13, 10)
+    rows = [_row("prompted", now - dt.timedelta(minutes=1))]  # notified, not done
+    assert d.should_skip_notify(rows, now, 15) is False
+
+
+def test_should_skip_uses_latest_completion():
+    now = dt.datetime(2026, 7, 14, 13, 10)
+    rows = [
+        _row("completed", now - dt.timedelta(hours=3)),
+        _row("completed", now - dt.timedelta(minutes=2)),
+    ]
+    assert d.should_skip_notify(rows, now, 15) is True
+
+
+def test_notify_skips_and_holds_rotation_after_recent_completion(tmp_path, monkeypatch):
+    calls = _isolate_state(tmp_path, monkeypatch)
+    d.write_state({"index": 3, "pending": None})
+    d.log_event("completed", {"id": "x", "name": "X", "category": "knee"})  # just now
+
+    d.cmd_notify(argparse.Namespace())
+
+    assert d.read_state()["index"] == 3  # rotation NOT advanced
+    assert calls == []  # no notification fired
+    assert "auto_skipped" in [r["event"] for r in d.read_log()]
+
+
+def test_notify_fires_when_last_completion_is_old(tmp_path, monkeypatch):
+    import csv
+    import os
+
+    calls = _isolate_state(tmp_path, monkeypatch)
+    d.write_state({"index": 0, "pending": None})
+    old = (dt.datetime.now() - dt.timedelta(minutes=30)).isoformat(timespec="seconds")
+    with open(os.path.join(tmp_path, "log.csv"), "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=d.LOG_FIELDS)
+        w.writeheader()
+        w.writerow(
+            {
+                "timestamp": old,
+                "date": old[:10],
+                "event": "completed",
+                "exercise_id": "x",
+                "exercise_name": "X",
+                "category": "knee",
+            }
+        )
+
+    d.cmd_notify(argparse.Namespace())
+
+    assert d.read_state()["index"] == 1  # advanced
+    assert len(calls) == 1  # notification fired
