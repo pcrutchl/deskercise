@@ -188,23 +188,31 @@ def cmd_notify(args) -> int:
     if tn is None:
         # Zero-dependency fallback so a missing brew install still nudges.
         script = (
-            f'display notification {json.dumps(message)} '
+            f"display notification {json.dumps(message)} "
             f'with title {json.dumps(cfg["title"])} '
-            f'subtitle {json.dumps(subtitle)}'
+            f"subtitle {json.dumps(subtitle)}"
         )
         subprocess.run(["/usr/bin/osascript", "-e", script])
-        print(f"(terminal-notifier not installed — sent a basic notification for {ex['id']})")
+        print(
+            f"(terminal-notifier not installed — sent a basic notification for {ex['id']})"
+        )
         return 0
 
     subprocess.run(
         [
             tn,
-            "-title", cfg["title"],
-            "-subtitle", subtitle,
-            "-message", message,
-            "-sound", cfg.get("sound", "Ping"),
-            "-group", LABEL,
-            "-execute", f'"{launcher}"',
+            "-title",
+            cfg["title"],
+            "-subtitle",
+            subtitle,
+            "-message",
+            message,
+            "-sound",
+            cfg.get("sound", "Ping"),
+            "-group",
+            LABEL,
+            "-execute",
+            f'"{launcher}"',
         ]
     )
     return 0
@@ -223,7 +231,8 @@ def human_duration(ex: dict) -> str:
         total = sum(seg_seconds(s) for s in segs)
         # Show "Ns × M" only for simple, equal single-timers (no sub-steps).
         if len(segs) > 1 and all(
-            "steps" not in s and s.get("seconds") == segs[0].get("seconds") for s in segs
+            "steps" not in s and s.get("seconds") == segs[0].get("seconds")
+            for s in segs
         ):
             return f"{segs[0]['seconds']}s × {len(segs)}"
         return f"{total}s"
@@ -248,7 +257,9 @@ def wrap(text: str, width: int = 68, indent: str = "  ") -> str:
     import textwrap
 
     return "\n".join(
-        textwrap.fill(line, width=width, initial_indent=indent, subsequent_indent=indent)
+        textwrap.fill(
+            line, width=width, initial_indent=indent, subsequent_indent=indent
+        )
         for line in text.splitlines()
     )
 
@@ -292,7 +303,11 @@ def run_session(ex: dict) -> None:
 
     try:
         for n in range(8, 0, -1):
-            print(f"\r  {C.DIM}read the cue, get into position… {n}{C.RESET}   ", end="", flush=True)
+            print(
+                f"\r  {C.DIM}read the cue, get into position… {n}{C.RESET}   ",
+                end="",
+                flush=True,
+            )
             time.sleep(1)
         print("\r" + " " * 48)
 
@@ -346,7 +361,9 @@ def cmd_session(args) -> int:
 
 def cmd_next(args) -> int:
     ex = peek_next(load_exercises())
-    print(f"{C.BOLD}{ex['name']}{C.RESET}  {C.DIM}({CATEGORY_LABEL.get(ex['category'])}, {human_duration(ex)}){C.RESET}")
+    print(
+        f"{C.BOLD}{ex['name']}{C.RESET}  {C.DIM}({CATEGORY_LABEL.get(ex['category'])}, {human_duration(ex)}){C.RESET}"
+    )
     return 0
 
 
@@ -400,7 +417,9 @@ def cmd_stats(args) -> int:
     print(f"  lifetime: {C.BOLD}{len(completed)}{C.RESET} completed")
     if completed:
         last = completed[-1]
-        print(f"  last:     {C.DIM}{last['exercise_name']} @ {last['timestamp']}{C.RESET}")
+        print(
+            f"  last:     {C.DIM}{last['exercise_name']} @ {last['timestamp']}{C.RESET}"
+        )
     if today_done:
         print(f"\n  {C.DIM}today:{C.RESET}")
         for r in today_done:
@@ -441,11 +460,17 @@ def build_plist() -> dict:
     sd = state_dir()
     return {
         "Label": LABEL,
-        "ProgramArguments": [sys.executable, os.path.join(SCRIPT_DIR, "deskercise.py"), "notify"],
+        "ProgramArguments": [
+            sys.executable,
+            os.path.join(SCRIPT_DIR, "deskercise.py"),
+            "notify",
+        ],
         "StartCalendarInterval": intervals,
         "StandardOutPath": os.path.join(sd, "agent.out.log"),
         "StandardErrorPath": os.path.join(sd, "agent.err.log"),
-        "EnvironmentVariables": {"PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"},
+        "EnvironmentVariables": {
+            "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        },
         "ProcessType": "Interactive",
     }
 
@@ -478,7 +503,9 @@ def cmd_install(args) -> int:
     if r.returncode != 0:
         # Older macOS fallback.
         subprocess.run(["launchctl", "unload", plist_path()], capture_output=True)
-        r = subprocess.run(["launchctl", "load", "-w", plist_path()], capture_output=True, text=True)
+        r = subprocess.run(
+            ["launchctl", "load", "-w", plist_path()], capture_output=True, text=True
+        )
         if r.returncode != 0:
             print(f"{C.YELLOW}launchctl error:{C.RESET} {r.stderr.strip()}")
             return 1
@@ -493,13 +520,17 @@ def cmd_install(args) -> int:
     print("  System Settings → Notifications → terminal-notifier")
     print("    • Allow Notifications: ON")
     print("    • Alert style: Alerts (not Banners — Alerts stay until dismissed)\n")
-    print(f"Test it now:  {C.CYAN}./deskercise notify{C.RESET}  (then click the notification)")
+    print(
+        f"Test it now:  {C.CYAN}./deskercise notify{C.RESET}  (then click the notification)"
+    )
     return 0
 
 
 def cmd_uninstall(args) -> int:
     uid = os.getuid()
-    subprocess.run(["launchctl", "bootout", f"gui/{uid}", plist_path()], capture_output=True)
+    subprocess.run(
+        ["launchctl", "bootout", f"gui/{uid}", plist_path()], capture_output=True
+    )
     subprocess.run(["launchctl", "unload", plist_path()], capture_output=True)
     if os.path.exists(plist_path()):
         os.remove(plist_path())
@@ -513,8 +544,12 @@ def cmd_doctor(args) -> int:
     tn = terminal_notifier_path()
     ok = f"{C.GREEN}✓{C.RESET}"
     no = f"{C.YELLOW}✗{C.RESET}"
-    print(f"  {ok if tn else no} terminal-notifier: {tn or 'NOT INSTALLED (brew install terminal-notifier)'}")
-    print(f"  {ok if os.path.exists(plist_path()) else no} launch agent plist: {plist_path()}")
+    print(
+        f"  {ok if tn else no} terminal-notifier: {tn or 'NOT INSTALLED (brew install terminal-notifier)'}"
+    )
+    print(
+        f"  {ok if os.path.exists(plist_path()) else no} launch agent plist: {plist_path()}"
+    )
 
     uid = os.getuid()
     r = subprocess.run(
@@ -565,7 +600,9 @@ def main() -> int:
 
     sub.add_parser("notify")
     sp = sub.add_parser("session")
-    sp.add_argument("--id", help="specific exercise id (default: pending from last notify)")
+    sp.add_argument(
+        "--id", help="specific exercise id (default: pending from last notify)"
+    )
     sub.add_parser("next")
     sub.add_parser("list")
     dp = sub.add_parser("done")
