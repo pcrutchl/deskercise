@@ -87,6 +87,7 @@ def read_state() -> dict:
     st.setdefault("up_idx", 0)  # position in the upright-exercise rotation
     st.setdefault("seat_idx", 0)  # position in the seated (nerve) rotation
     st.setdefault("pending", None)
+    st.setdefault("owed", False)  # an exercise deferred because you were sitting
     return st
 
 
@@ -261,58 +262,30 @@ def terminal_notifier_path() -> str | None:
     return None
 
 
-def cmd_notify(args) -> int:
-    exercises = load_exercises()
-    cfg = load_config()
-
-    # Don't nudge if you've already moved recently (manual `now`, or a
-    # notification you got to late). Don't advance the rotation either.
-    now = dt.datetime.now()
-    gap = cfg.get("min_gap_minutes", 15)
-    if should_skip_notify(read_log(), now, gap):
-        log_event("auto_skipped", {"name": f"(moved <{gap}m ago — nudge skipped)"})
-        return 0
-
-    state = read_state()
-    up_pool, seated_pool = exercise_pools(exercises)
-
-    # Pick WITHOUT advancing — the pointer only moves when you actually do the
-    # exercise (see _advance_pool_pointer, called on complete/skip). So a missed
-    # nudge persists: next :10 re-offers the same exercise.
-    if current_posture_is_upright():
-        ex = up_pool[state.get("up_idx", 0) % len(up_pool)]
-    else:
-        # Sit phase: rest, but allow occasional seated (nerve) work.
-        cooldown = posture_cfg().get("nerve_rest_cooldown_min", 180)
-        if not seated_pool or not nerve_due(read_log(), now, cooldown):
-            log_event("rest", {"name": "(sit phase — rest)", "category": "posture"})
-            return 0
-        ex = seated_pool[state.get("seat_idx", 0) % len(seated_pool)]
-
-    # Stash which exercise the click should launch.
-    state["pending"] = ex["id"]
-    write_state(state)
+def _serve_exercise(ex: dict) -> None:
+    """Stash the exercise as pending and fire its clickable notification.
+    Clears any 'owed' flag — an exercise is now on offer."""
+    st = read_state()
+    st["pending"] = ex["id"]
+    st["owed"] = False
+    write_state(st)
     log_event("prompted", ex)
 
+    cfg = load_config()
     tn = terminal_notifier_path()
     launcher = os.path.join(SCRIPT_DIR, "bin", "launch-session")
-
     duration = human_duration(ex)
     subtitle = f"{CATEGORY_LABEL.get(ex['category'], ex['category'])} · {duration}"
     message = f"{ex['name']} — click to start the guided timer"
 
     if tn is None:
-        # Zero-dependency fallback so a missing brew install still nudges.
         script = (
             f"display notification {json.dumps(message)} "
             f'with title {json.dumps(cfg["title"])} '
             f"subtitle {json.dumps(subtitle)}"
         )
         subprocess.run(["/usr/bin/osascript", "-e", script])
-        print(
-            f"(terminal-notifier not installed — sent a basic notification for {ex['id']})"
-        )
-        return 0
+        return
 
     tn_args = [
         tn,
@@ -332,7 +305,62 @@ def cmd_notify(args) -> int:
     if cfg.get("ignore_dnd"):
         tn_args.append("-ignoreDnD")  # break through Focus / Do Not Disturb
     subprocess.run(tn_args)
+
+
+def cmd_notify(args) -> int:
+    exercises = load_exercises()
+    cfg = load_config()
+    now = dt.datetime.now()
+
+    # Don't nudge if you've already moved recently (manual `now`, or a
+    # notification you got to late).
+    gap = cfg.get("min_gap_minutes", 15)
+    if should_skip_notify(read_log(), now, gap):
+        log_event("auto_skipped", {"name": f"(moved <{gap}m ago — nudge skipped)"})
+        return 0
+
+    up_pool, seated_pool = exercise_pools(exercises)
+    state = read_state()
+
+    # Pick WITHOUT advancing — the pointer only moves when you actually do the
+    # exercise (advance_pool_pointer on complete/skip), so a missed nudge persists.
+    if current_posture_is_upright():
+        _serve_exercise(up_pool[state.get("up_idx", 0) % len(up_pool)])
+        return 0
+
+    # Sit phase: offer a seated (nerve) exercise if one's due, else DON'T drop
+    # this slot — mark it owed so it fires the moment you next stand (not skipped
+    # for a whole hour just because you were sitting at :10).
+    cooldown = posture_cfg().get("nerve_rest_cooldown_min", 180)
+    if seated_pool and nerve_due(read_log(), now, cooldown):
+        _serve_exercise(seated_pool[state.get("seat_idx", 0) % len(seated_pool)])
+    else:
+        state["owed"] = True
+        write_state(state)
+        log_event(
+            "owed",
+            {
+                "name": "(sitting — exercise owed until you stand)",
+                "category": "posture",
+            },
+        )
     return 0
+
+
+def fire_owed_exercise() -> None:
+    """If an exercise is owed and you're now upright (and in-window, not just
+    moved), fire it. Called when a posture change puts you standing/on the board."""
+    st = read_state()
+    if not st.get("owed") or not current_posture_is_upright():
+        return
+    cfg = load_config()
+    now = dt.datetime.now()
+    if not in_work_window(cfg, now):
+        return
+    if should_skip_notify(read_log(), now, cfg.get("min_gap_minutes", 15)):
+        return
+    up_pool, _ = exercise_pools(load_exercises())
+    _serve_exercise(up_pool[st.get("up_idx", 0) % len(up_pool)])
 
 
 def seg_seconds(seg: dict) -> int:
@@ -486,6 +514,10 @@ def run_session(ex: dict) -> None:
 
     log_event("completed", ex)
     advance_pool_pointer(ex)
+    _st = read_state()
+    if _st.get("owed"):  # doing one satisfies any owed exercise
+        _st["owed"] = False
+        write_state(_st)
     print()
     print(f"  {C.GREEN}{C.BOLD}✓ done — logged.{C.RESET}")
     if ex.get("note"):
@@ -1053,6 +1085,7 @@ def cmd_pose(args) -> int:
         # persist inertly under Alerts style; the xbar menu bar shows state.
         _clear_posture_notification()
         print(f"{C.GREEN}→ {st['posture']}{C.RESET}")
+        fire_owed_exercise()  # standing/board now → deliver any owed exercise
         return 0
 
     if getattr(args, "posture", None):
@@ -1061,6 +1094,7 @@ def cmd_pose(args) -> int:
         _set_posture(st, p, idx, since=since)
         extra = f" (since {args.since})" if since else ""
         print(f"{C.GREEN}→ {p}{C.RESET}{extra}")
+        fire_owed_exercise()
         return 0
 
     if since:  # backdate the current posture's start time
@@ -1183,6 +1217,7 @@ def cmd_menubar(args) -> int:
         and should_skip_notify(read_log(), fires[0], cfg.get("min_gap_minutes", 15))
     )
 
+    owed = read_state().get("owed", False)
     picon = POSTURE_ICONS.get(st["posture"], "")
     if st.get("paused"):
         title, color = f"{picon} paused", ""
@@ -1190,7 +1225,12 @@ def cmd_menubar(args) -> int:
         title, color = f"{picon} {p_remaining}m", ""
     else:
         title, color = f"{picon} +{-p_remaining}m", " | color=red"
-    ex_part = f" · ⏱{_fmt_dur(ex_rem)}" if ex_rem is not None else ""
+    if owed:
+        ex_part = " · 🏋 owed"
+        if not color:
+            color = " | color=orange"
+    else:
+        ex_part = f" · ⏱{_fmt_dur(ex_rem)}" if ex_rem is not None else ""
     print(f"{title}{ex_part}{color}")
     print("---")
 
@@ -1216,9 +1256,11 @@ def cmd_menubar(args) -> int:
 
     print("---")
     print(f"Next upright exercise: {nxt_ex['name']}")
-    if not current_posture_is_upright():
+    if owed:
+        print("⚠︎ owed — stand (or Advance) to do it now")
+    elif not current_posture_is_upright():
         print("(sit phase — rests until you stand, minus occasional nerve work)")
-    if ex_rem is not None:
+    if ex_rem is not None and not owed:
         when = fires[0].strftime("%-I:%M")
         note = "  ⚠︎ will skip (moved recently)" if will_skip else ""
         print(f"next check in {_fmt_dur(ex_rem)} ({when}){note}")

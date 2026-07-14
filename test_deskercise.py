@@ -334,7 +334,8 @@ def test_notify_sit_phase_rests_when_nerve_not_due(tmp_path, monkeypatch):
     d.cmd_notify(argparse.Namespace())
     assert calls == []  # no notification
     assert d.read_state()["seat_idx"] == 0  # seated rotation not advanced
-    assert "rest" in [r["event"] for r in d.read_log()]
+    assert d.read_state()["owed"] is True  # not dropped — owed until you stand
+    assert "owed" in [r["event"] for r in d.read_log()]
 
 
 def test_notify_sit_phase_serves_nerve_when_due(tmp_path, monkeypatch):
@@ -344,6 +345,34 @@ def test_notify_sit_phase_serves_nerve_when_due(tmp_path, monkeypatch):
     assert d.read_state()["pending"] == seated[0]["id"]  # a seated (nerve) move
     assert d.read_state()["up_idx"] == 0  # upright rotation untouched
     assert len(calls) == 1
+
+
+def test_fire_owed_exercise_when_upright(tmp_path, monkeypatch):
+    calls = _isolate_state(tmp_path, monkeypatch, posture="stand")  # upright
+    monkeypatch.setattr(d, "in_work_window", lambda cfg, now: True)
+    up, _ = d.exercise_pools(d.load_exercises())
+    st = d.read_state()
+    st["owed"] = True
+    d.write_state(st)
+
+    d.fire_owed_exercise()
+
+    assert d.read_state()["pending"] == up[0]["id"]
+    assert d.read_state()["owed"] is False  # served
+    assert len(calls) == 1
+
+
+def test_fire_owed_exercise_noop_when_sitting(tmp_path, monkeypatch):
+    calls = _isolate_state(tmp_path, monkeypatch, posture="sit")
+    monkeypatch.setattr(d, "in_work_window", lambda cfg, now: True)
+    st = d.read_state()
+    st["owed"] = True
+    d.write_state(st)
+
+    d.fire_owed_exercise()
+
+    assert d.read_state()["owed"] is True  # still owed — you're not upright yet
+    assert calls == []
 
 
 # --- posture rotation -------------------------------------------------------

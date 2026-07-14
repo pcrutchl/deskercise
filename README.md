@@ -163,10 +163,12 @@ the exercise nudge respects your current posture instead of fighting it:
 
 - **Upright** (standing *or* on the board — they're interchangeable; step on/off
   as the exercise needs): serves the next standing/board exercise.
-- **Sitting:** **rests** by default. The two seated nerve exercises are still
-  eligible — one is offered only if you haven't done nerve work in the last
-  `nerve_rest_cooldown_min` (default 180). Otherwise the nudge stays quiet and the
-  upright rotation waits until you stand.
+- **Sitting:** it won't make you stand, but it also won't waste the slot. If a
+  seated nerve exercise is due (you haven't done hand/forearm work in
+  `nerve_rest_cooldown_min`, default 180) it offers that. Otherwise the exercise
+  is marked **owed** and fires the **moment you next go upright** (click a posture
+  nudge to stand/board, or set it) — so sitting at `:10` defers the exercise, it
+  doesn't skip it for the hour.
 - `desknow` / the menu-bar **Do it now** always serve an upright exercise — if
   you're reaching for it, you're choosing to move.
 
