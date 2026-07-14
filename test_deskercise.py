@@ -169,30 +169,42 @@ def _isolate_state(tmp_path, monkeypatch, posture="stand"):
     return calls
 
 
-def test_rotation_advances_and_sets_pending(tmp_path, monkeypatch):
+def test_notify_sets_pending_without_advancing(tmp_path, monkeypatch):
+    # A fired nudge does NOT advance the pointer — a missed exercise persists.
     _isolate_state(tmp_path, monkeypatch)
     up, _ = d.exercise_pools(d.load_exercises())
 
     d.cmd_notify(argparse.Namespace())
     st = d.read_state()
-    assert st["up_idx"] == 1
+    assert st["up_idx"] == 0  # unchanged
     assert st["pending"] == up[0]["id"]
 
-    d.cmd_notify(argparse.Namespace())
-    st = d.read_state()
-    assert st["up_idx"] == 2
-    assert st["pending"] == up[1]["id"]
-
-
-def test_rotation_wraps_at_end(tmp_path, monkeypatch):
-    _isolate_state(tmp_path, monkeypatch)
-    up, _ = d.exercise_pools(d.load_exercises())
-    d.write_state({"up_idx": len(up) - 1, "seat_idx": 0, "pending": None})
-
+    # Fire again (simulating :10 rolling around after a miss) — same exercise.
     d.cmd_notify(argparse.Namespace())
     st = d.read_state()
     assert st["up_idx"] == 0
-    assert st["pending"] == up[-1]["id"]
+    assert st["pending"] == up[0]["id"]
+
+
+def test_advance_pool_pointer_upright_and_wrap(tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    up, _ = d.exercise_pools(d.load_exercises())
+
+    d.advance_pool_pointer(up[0])
+    assert d.read_state()["up_idx"] == 1
+
+    d.write_state({"up_idx": len(up) - 1, "seat_idx": 0, "pending": None})
+    d.advance_pool_pointer(up[-1])
+    assert d.read_state()["up_idx"] == 0  # wraps
+
+
+def test_advance_pool_pointer_seated_only_moves_seat_idx(tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    _, seated = d.exercise_pools(d.load_exercises())
+    d.advance_pool_pointer(seated[0])
+    st = d.read_state()
+    assert st["seat_idx"] == 1
+    assert st["up_idx"] == 0  # upright pointer untouched
 
 
 # --- skip-if-recently-moved (should_skip_notify + cmd_notify integration) ----
@@ -264,7 +276,8 @@ def test_notify_fires_when_last_completion_is_old(tmp_path, monkeypatch):
 
     d.cmd_notify(argparse.Namespace())
 
-    assert d.read_state()["up_idx"] == 1  # advanced
+    assert d.read_state()["up_idx"] == 0  # nudge fires but doesn't advance
+    assert d.read_state()["pending"] is not None
     assert len(calls) == 1  # notification fired
 
 

@@ -181,6 +181,20 @@ def peek_next(exercises: list[dict]) -> dict:
     return up[read_state().get("up_idx", 0) % len(up)]
 
 
+def advance_pool_pointer(ex: dict) -> None:
+    """Move the rotation pointer past `ex` (called once it's actually done). The
+    pointer does NOT move when a nudge is merely fired/ignored, so a missed
+    exercise persists and is re-offered next time."""
+    up, seated = exercise_pools(load_exercises())
+    st = read_state()
+    if exercise_posture(ex) == "seated":
+        if ex in seated:
+            st["seat_idx"] = (seated.index(ex) + 1) % len(seated)
+    elif ex in up:
+        st["up_idx"] = (up.index(ex) + 1) % len(up)
+    write_state(st)
+
+
 def nerve_due(rows: list[dict], now: dt.datetime, cooldown_min: int) -> bool:
     """True if it's been at least cooldown_min since the last seated/nerve
     completion — the 'allow nerve work' valve for sit phases."""
@@ -262,19 +276,18 @@ def cmd_notify(args) -> int:
     state = read_state()
     up_pool, seated_pool = exercise_pools(exercises)
 
+    # Pick WITHOUT advancing — the pointer only moves when you actually do the
+    # exercise (see _advance_pool_pointer, called on complete/skip). So a missed
+    # nudge persists: next :10 re-offers the same exercise.
     if current_posture_is_upright():
-        i = state.get("up_idx", 0) % len(up_pool)
-        ex = up_pool[i]
-        state["up_idx"] = (i + 1) % len(up_pool)
+        ex = up_pool[state.get("up_idx", 0) % len(up_pool)]
     else:
         # Sit phase: rest, but allow occasional seated (nerve) work.
         cooldown = posture_cfg().get("nerve_rest_cooldown_min", 180)
         if not seated_pool or not nerve_due(read_log(), now, cooldown):
             log_event("rest", {"name": "(sit phase — rest)", "category": "posture"})
             return 0
-        i = state.get("seat_idx", 0) % len(seated_pool)
-        ex = seated_pool[i]
-        state["seat_idx"] = (i + 1) % len(seated_pool)
+        ex = seated_pool[state.get("seat_idx", 0) % len(seated_pool)]
 
     # Stash which exercise the click should launch.
     state["pending"] = ex["id"]
@@ -466,11 +479,13 @@ def run_session(ex: dict) -> None:
     except KeyboardInterrupt:
         print()
         log_event("skipped", ex)
+        advance_pool_pointer(ex)  # explicit skip counts as engaging — move on
         print(f"\n  {C.YELLOW}skipped — logged. no worries.{C.RESET}")
         _linger(2)
         return
 
     log_event("completed", ex)
+    advance_pool_pointer(ex)
     print()
     print(f"  {C.GREEN}{C.BOLD}✓ done — logged.{C.RESET}")
     if ex.get("note"):
@@ -506,12 +521,10 @@ def cmd_now(args) -> int:
     scheduled nudge self-skip (see should_skip_notify)."""
     up_pool, _ = exercise_pools(load_exercises())
     state = read_state()
-    i = state.get("up_idx", 0) % len(up_pool)
-    ex = up_pool[i]
-    state["up_idx"] = (i + 1) % len(up_pool)
+    ex = up_pool[state.get("up_idx", 0) % len(up_pool)]
     state["pending"] = ex["id"]
     write_state(state)
-    run_session(ex)
+    run_session(ex)  # advances the pointer on complete/skip
     return 0
 
 

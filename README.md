@@ -36,13 +36,15 @@ If you've **completed** an exercise within the last `min_gap_minutes` (default
 scheduled nudge **self-skips** (and doesn't advance the rotation). So if the
 12:10 nudge is one you finally do at 1:05, you won't also get pestered at 1:10.
 
-### If you just ignore a notification
+### If you miss / ignore a notification
 
-Nothing is logged as done, you get no streak credit, and the rotation still
-advances (next hour offers the next exercise). Notifications are grouped, so an
-unclicked one is **replaced** by the next hour's rather than piling up. Because
-skipping keys off *completions*, ignoring a nudge does **not** suppress the next
-one — the following hour fires normally.
+The rotation only advances when you **actually do** an exercise (complete it, or
+open it and Ctrl-C to skip). A nudge that merely fires and is ignored does **not**
+advance — so a missed exercise **persists** and the same one is re-offered at the
+next `:10`. Step away for lunch and you'll come back to the exercise you missed,
+not three exercises deep. Notifications are grouped, so repeated re-offers
+**replace** each other rather than piling up. (Closing the session window without
+finishing also counts as a miss — it persists.)
 
 ## Setup
 
