@@ -826,6 +826,11 @@ def cmd_doctor(args) -> int:
     print(
         f"  {ok if xb_ok else no} xbar plugin: {'installed' if xb_ok else 'not installed'}"
     )
+    iterm = os.path.isdir("/Applications/iTerm.app")
+    print(
+        f"  {ok if iterm else no} iTerm2 (session window): "
+        f"{'installed' if iterm else 'NOT installed (brew install --cask iterm2)'}"
+    )
     print(f"  {ok} python: {sys.executable}")
     print(f"  {ok} state dir: {state_dir()}")
 
@@ -1146,7 +1151,11 @@ def cmd_menubar(args) -> int:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(prog="deskercise", description=__doc__)
+    p = argparse.ArgumentParser(
+        prog="deskercise",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("notify")

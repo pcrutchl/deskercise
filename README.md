@@ -20,11 +20,12 @@ Built around a specific setup: powered standing desk, FluidStance balance board,
   clickable macOS notification via `terminal-notifier`. Selection is
   **posture-aware** (see below): when you're upright it serves a standing/board
   exercise; when you're sitting it rests (with occasional seated nerve work).
-- **Clicking the notification** opens a right-sized Terminal window with the
+- **Clicking the notification** opens a right-sized **iTerm2** window with the
   guided session: the instructions, then a **visual countdown** for each timed
   hold (with discrete sub-timers, e.g. "palm down 15s → palm up 15s → thumb up
   15s"), or a press-Enter-when-done prompt for rep-based moves. The window
-  **closes itself** when the session ends.
+  **closes itself** when the session ends. (iTerm2 is used for its scripting +
+  inline-image support; install it via `brew install --cask iterm2`.)
 - Finishing logs a completion. `stats` shows today's tally, your streak, and
   lifetime total.
 
@@ -47,7 +48,8 @@ one — the following hour fires normally.
 
 ```sh
 brew install terminal-notifier      # clickable notifications
-./deskercise install                # loads the launchd agent + installs shortcuts
+brew install --cask iterm2          # guided-session window (scripting + images)
+./deskercise install                # loads the launchd agents + shortcuts
 ```
 
 `install` also:

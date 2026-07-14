@@ -1,22 +1,49 @@
 #!/bin/bash
 # Invoked by terminal-notifier's -execute (notification click) and by the xbar
-# "Do it now" action. Opens a right-sized Terminal.app window, runs the guided
-# flow, and closes the window automatically once the process exits.
+# "Do it now" action. Opens a right-sized iTerm2 window, runs the guided flow,
+# and closes the window once the guided-session python process exits.
 #   $1 = mode: "session" (default, runs the pending exercise) or "now"
+#
+# Why not poll iTerm's `is processing`? It tracks output, not the running job, so
+# it goes false during the silent "switch" pause and every rep-based Enter wait —
+# slamming the window shut mid-exercise. Polling the session's tty for the python
+# process tracks the actual job regardless of output.
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 MODE="${1:-session}"
+CMD="clear; python3 '$DIR/deskercise.py' $MODE"
+
+TTY="$(/usr/bin/osascript <<EOF
+tell application "iTerm"
+    activate
+    set w to (create window with default profile)
+    tell current session of w
+        set rows to 26
+        set columns to 74
+        write text "$CMD"
+        return tty
+    end tell
+end tell
+EOF
+)"
+
+DEV="${TTY#/dev/}"
+
+# Wait for the python session to appear (tolerate slow shell startup)…
+for _ in $(seq 1 20); do
+    ps -t "$DEV" -o comm= 2>/dev/null | grep -qi python && break
+    sleep 0.5
+done
+# …then wait for it to finish.
+while ps -t "$DEV" -o comm= 2>/dev/null | grep -qi python; do
+    sleep 0.5
+done
 
 /usr/bin/osascript <<EOF
-tell application "Terminal"
-    activate
-    set theTab to do script "clear; python3 '$DIR/deskercise.py' $MODE"
-    set theWindow to window 1
-    set number of columns of theWindow to 74
-    set number of rows of theWindow to 26
-    delay 1
-    repeat while busy of theTab
-        delay 0.5
+tell application "iTerm"
+    repeat with win in windows
+        try
+            if (tty of current session of win) is "$TTY" then close win
+        end try
     end repeat
-    close theWindow saving no
 end tell
 EOF
