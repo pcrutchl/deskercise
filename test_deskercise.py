@@ -387,7 +387,15 @@ def test_pose_advance_cycles_through_rotation(tmp_path, monkeypatch):
 
 def test_pose_set_manual_snaps_idx(tmp_path, monkeypatch):
     _isolate_posture(tmp_path, monkeypatch)
-    d.cmd_pose(argparse.Namespace(next=False, posture="board"))
+    d.cmd_pose(argparse.Namespace(next=False, posture="board", since=None))
     st = d.read_posture()
     assert st["posture"] == "board"
     assert st["idx"] == 3  # first rotation index matching 'board'
+
+
+def test_pose_since_backdates_start(tmp_path, monkeypatch):
+    _isolate_posture(tmp_path, monkeypatch)
+    d.cmd_pose(argparse.Namespace(next=False, posture="stand", since="12:15"))
+    st = d.read_posture()
+    assert st["posture"] == "stand"
+    assert st["since"].endswith("T12:15:00")

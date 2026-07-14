@@ -20,6 +20,8 @@ Subcommands:
 
 Posture rotation (a separate dwell-state subsystem — sit/stand/board):
   pose [sit|stand|board]   Set the current posture (no arg: show status).
+  pose [posture] --since HH:MM   Set/backdate the start time (e.g. you've been
+                           standing since 12:15).
   pose --next              Advance to the next posture in the rotation.
   posture-check            Nudge if the current posture is over budget (agent).
   posture-pause / -resume  Silence nudges (e.g. meetings) / restart the timer.
@@ -1002,11 +1004,13 @@ def _clear_posture_notification() -> None:
         subprocess.run([tn, "-remove", POSTURE_LABEL], capture_output=True)
 
 
-def _set_posture(st: dict, posture: str, idx: int | None = None) -> None:
+def _set_posture(
+    st: dict, posture: str, idx: int | None = None, since: dt.datetime | None = None
+) -> None:
     st["posture"] = posture
     if idx is not None:
         st["idx"] = idx
-    st["since"] = dt.datetime.now().isoformat(timespec="seconds")
+    st["since"] = (since or dt.datetime.now()).isoformat(timespec="seconds")
     st["paused"] = False
     write_posture(st)
     log_event("posture", {"name": f"→ {posture}", "category": "posture"})
@@ -1016,6 +1020,15 @@ def cmd_pose(args) -> int:
     pc = posture_cfg()
     rotation = pc["rotation"]
     st = read_posture()
+
+    since = None
+    if getattr(args, "since", None):
+        try:
+            t = dt.datetime.strptime(args.since, "%H:%M").time()
+        except ValueError:
+            print(f"{C.YELLOW}--since must be HH:MM (24-hour), e.g. 12:15{C.RESET}")
+            return 1
+        since = dt.datetime.combine(dt.date.today(), t)
 
     if getattr(args, "next", False):
         idx = (st.get("idx", 0) + 1) % len(rotation)
@@ -1028,8 +1041,16 @@ def cmd_pose(args) -> int:
 
     if getattr(args, "posture", None):
         p = args.posture
-        _set_posture(st, p, rotation.index(p) if p in rotation else st.get("idx", 0))
-        print(f"{C.GREEN}→ {p}{C.RESET}")
+        idx = rotation.index(p) if p in rotation else st.get("idx", 0)
+        _set_posture(st, p, idx, since=since)
+        extra = f" (since {args.since})" if since else ""
+        print(f"{C.GREEN}→ {p}{C.RESET}{extra}")
+        return 0
+
+    if since:  # backdate the current posture's start time
+        st["since"] = since.isoformat(timespec="seconds")
+        write_posture(st)
+        print(f"{C.GREEN}{st['posture']} since {args.since}{C.RESET}")
         return 0
 
     return cmd_posture_status(args)
@@ -1220,6 +1241,9 @@ def main() -> int:
     pp = sub.add_parser("pose")
     pp.add_argument("posture", nargs="?", choices=["sit", "stand", "board"])
     pp.add_argument("--next", action="store_true", help="advance to the next posture")
+    pp.add_argument(
+        "--since", metavar="HH:MM", help="backdate the start time (e.g. 12:15)"
+    )
     pcp = sub.add_parser("posture-check")
     pcp.add_argument(
         "--force", action="store_true", help="fire a nudge now (ignore budget/window)"

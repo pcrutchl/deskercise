@@ -26,6 +26,7 @@ The `id` is the first field of each entry in `../exercises.json`. Current ids:
 | `ext_rotated_half_squats` | Externally-rotated half squats |
 | `standing_figure4` | Standing figure-4 hip stretch |
 | `two_foot_board_hold` | Two-foot balance-board hold |
+| `board_calf_stretch` | Balance-board calf stretch |
 | `pvc_thoracic_rotation` | PVC thoracic rotations |
 
 Example: `media/ulnar_nerve_glide.png` → shown during the ulnar nerve glide.

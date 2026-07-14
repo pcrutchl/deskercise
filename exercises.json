@@ -184,6 +184,16 @@
       "note": "Baseline stability — master this before chasing longer single-leg holds."
     },
     {
+      "id": "board_calf_stretch",
+      "name": "Balance-board calf stretch",
+      "category": "balance",
+      "equipment": "FluidStance board",
+      "work_friendly": false,
+      "cue": "Heels on the floor, place the balls/arches of both feet on the near edge of the board and let it tip back so your toes ride higher than your heels. That forefoot-up position stretches both calves and Achilles at once. Legs straight, ease your weight in, hold still — no bouncing. Brace on the desk if you like.",
+      "segments": [{ "label": "Hold — toes up, heels down", "seconds": 60 }],
+      "note": "Forefoot-elevated dorsiflexion (toes higher than heels) — the classic calf/Achilles stretch, both feet at once. Good for cyclists' tight calves; keep it gentle."
+    },
+    {
       "id": "pvc_thoracic_rotation",
       "name": "PVC thoracic rotations",
       "category": "upper",
