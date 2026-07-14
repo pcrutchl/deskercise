@@ -957,6 +957,7 @@ def read_posture() -> dict:
     st.setdefault("posture", pc["rotation"][st["idx"] % len(pc["rotation"])])
     st.setdefault("since", dt.datetime.now().isoformat(timespec="seconds"))
     st.setdefault("paused", False)
+    st.setdefault("nudged", False)  # already sounded for this over-budget episode?
     return st
 
 
@@ -984,7 +985,7 @@ def _posture_lines(st, pc, now):
 
 
 def post_notification(
-    cfg, title, message, subtitle="", group=None, execute=None
+    cfg, title, message, subtitle="", group=None, execute=None, silent=False
 ) -> None:
     """Fire a macOS notification (terminal-notifier, osascript fallback)."""
     tn = terminal_notifier_path()
@@ -1000,7 +1001,8 @@ def post_notification(
     args = [tn, "-title", title, "-message", message]
     if subtitle:
         args += ["-subtitle", subtitle]
-    args += ["-sound", cfg.get("sound", "Ping")]
+    if not silent:
+        args += ["-sound", cfg.get("sound", "Ping")]
     if group:
         args += ["-group", group]
     if execute:
@@ -1025,6 +1027,7 @@ def _set_posture(
         st["idx"] = idx
     st["since"] = (since or dt.datetime.now()).isoformat(timespec="seconds")
     st["paused"] = False
+    st["nudged"] = False  # new posture episode → next over-budget nudge sounds
     write_posture(st)
     log_event("posture", {"name": f"→ {posture}", "category": "posture"})
 
@@ -1091,13 +1094,20 @@ def cmd_posture_check(args) -> int:
             f"{shlex.quote(sys.executable)} "
             f"{shlex.quote(os.path.join(SCRIPT_DIR, 'deskercise.py'))} pose --next"
         )
+        # Sound only the first nudge of an over-budget episode; re-nudges are
+        # silent (they still persist visually). --force always sounds.
+        first = not st.get("nudged", False)
         post_notification(
             cfg,
             "Posture",
             f"{icon} {st['posture']} {elapsed}m → switch to {nxt}",
             group=POSTURE_LABEL,
             execute=advance,
+            silent=not (first or force),
         )
+        if not st.get("nudged", False):
+            st["nudged"] = True
+            write_posture(st)
     return 0
 
 
