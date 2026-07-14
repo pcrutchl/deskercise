@@ -146,15 +146,26 @@ research: uninterrupted sitting ≥30 min independently raises risk, and static
 standing is also fatiguing — so no posture is safe to camp in, and `sit` is
 interleaved between the two upright modes.
 
-- A second launchd agent (`posture-check`, every 5 min during work hours) fires a
-  notification when the current posture exceeds its dwell budget: *"sit 27m →
-  switch to stand."* **Clicking it advances the state.**
+- A second launchd agent (`posture-check`, every `check_every_min` — default
+  **2 min** — during work hours) fires a notification when the current posture
+  exceeds its dwell budget: *"stand 14m → switch to sit."* **Clicking it advances
+  the state.** Only the first nudge of an over-budget episode plays a sound;
+  re-nudges persist visually but stay silent.
 - There's no sensor to detect sit/stand on a dumb desk (and Apple Silicon Macs
   have no accelerometer anyway), so state is **confirm-on-transition**: you click
   the nudge, or run `deskercise pose <sit|stand|board>` if you go off-script.
 - **Persistent by design:** if you ignore a nudge it keeps re-firing every check
   until you actually move. Use `posture-pause` for meetings; `posture-resume`
   restarts the timer.
+
+> **Refresh cadences — the notification lags the menu bar.** The xbar plugin
+> refreshes every ~30s, so it turns **red the moment you go over budget**. The
+> notification agent only checks every `check_every_min` (2 min), so the *nudge*
+> can arrive up to ~2 min after the red. That's intentional: **xbar red is the
+> instant, silent, glanceable signal** (act on it and you'll often beat the
+> notification), while the **notification is the audible backstop** for when
+> you're heads-down and not looking at the menu bar. A shorter `check_every_min`
+> tightens the lag but can't out-pace the 30s xbar refresh.
 
 ### Posture-matched exercises
 
@@ -179,15 +190,17 @@ If you have [xbar](https://xbarapp.com), `install` adds a menu-bar dashboard
 current posture + time left **and** the next exercise + countdown:
 
 ```
-🪑 12m · ⏱23m         ← posture remaining · time to next exercise
+🪑 12m · ⏱23m         ← posture remaining · time to next exercise check
+                         (turns red when over budget; shows "🏋 owed" if an
+                          exercise is waiting for you to stand)
 ──────────────
 Posture: sit · 13m / 25m
 Advance → stand
 Pause
 Set: sit / stand / board
 ──────────────
-Next exercise: Single-leg mini squats
-in 23m (1:10)
+Next upright exercise: Single-leg mini squats
+next check in 23m (1:10)
 Do it now            ← opens the guided session window
 ```
 
