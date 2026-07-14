@@ -12,6 +12,7 @@
     "enabled": true,
     "rotation": ["sit", "stand", "sit", "board"],
     "budgets_min": { "sit": 25, "stand": 12, "board": 18 },
-    "check_every_min": 5
+    "check_every_min": 5,
+    "nerve_rest_cooldown_min": 180
   }
 }

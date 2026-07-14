@@ -78,9 +78,13 @@ def log_path() -> str:
 def read_state() -> dict:
     try:
         with open(state_path()) as f:
-            return json.load(f)
+            st = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        return {"index": 0, "pending": None}
+        st = {}
+    st.setdefault("up_idx", 0)  # position in the upright-exercise rotation
+    st.setdefault("seat_idx", 0)  # position in the seated (nerve) rotation
+    st.setdefault("pending", None)
+    return st
 
 
 def write_state(state: dict) -> None:
@@ -154,9 +158,47 @@ def find_by_id(exercises: list[dict], ex_id: str) -> dict | None:
     return next((e for e in exercises if e["id"] == ex_id), None)
 
 
+def exercise_posture(ex: dict) -> str:
+    """'seated' (doable sitting — the nerve work) or 'upright' (needs standing;
+    board and standing are interchangeable, so both count as upright)."""
+    return ex.get("posture") or (
+        "seated" if ex.get("category") == "nerve" else "upright"
+    )
+
+
+def exercise_pools(exercises: list[dict]) -> tuple[list[dict], list[dict]]:
+    upright = [e for e in exercises if exercise_posture(e) == "upright"]
+    seated = [e for e in exercises if exercise_posture(e) == "seated"]
+    return upright, seated
+
+
 def peek_next(exercises: list[dict]) -> dict:
-    idx = read_state().get("index", 0) % len(exercises)
-    return exercises[idx]
+    """Next UPRIGHT exercise (what you'd do standing) — used for previews."""
+    up, _ = exercise_pools(exercises)
+    return up[read_state().get("up_idx", 0) % len(up)]
+
+
+def nerve_due(rows: list[dict], now: dt.datetime, cooldown_min: int) -> bool:
+    """True if it's been at least cooldown_min since the last seated/nerve
+    completion — the 'allow nerve work' valve for sit phases."""
+    times = [
+        dt.datetime.fromisoformat(r["timestamp"])
+        for r in rows
+        if r.get("event") == "completed"
+        and r.get("category") == "nerve"
+        and r.get("timestamp")
+    ]
+    if not times:
+        return True
+    return (now - max(times)) >= dt.timedelta(minutes=cooldown_min)
+
+
+def current_posture_is_upright() -> bool:
+    """Upright = standing or on the board. If the posture subsystem is disabled,
+    treat everything as upright so exercises fire on their own."""
+    if not posture_cfg().get("enabled", True):
+        return True
+    return read_posture()["posture"] in ("stand", "board")
 
 
 # ---------------------------------------------------------------------------
@@ -208,17 +250,30 @@ def cmd_notify(args) -> int:
 
     # Don't nudge if you've already moved recently (manual `now`, or a
     # notification you got to late). Don't advance the rotation either.
+    now = dt.datetime.now()
     gap = cfg.get("min_gap_minutes", 15)
-    if should_skip_notify(read_log(), dt.datetime.now(), gap):
+    if should_skip_notify(read_log(), now, gap):
         log_event("auto_skipped", {"name": f"(moved <{gap}m ago — nudge skipped)"})
         return 0
 
     state = read_state()
-    idx = state.get("index", 0) % len(exercises)
-    ex = exercises[idx]
+    up_pool, seated_pool = exercise_pools(exercises)
 
-    # Advance rotation and stash which exercise the click should launch.
-    state["index"] = (idx + 1) % len(exercises)
+    if current_posture_is_upright():
+        i = state.get("up_idx", 0) % len(up_pool)
+        ex = up_pool[i]
+        state["up_idx"] = (i + 1) % len(up_pool)
+    else:
+        # Sit phase: rest, but allow occasional seated (nerve) work.
+        cooldown = posture_cfg().get("nerve_rest_cooldown_min", 180)
+        if not seated_pool or not nerve_due(read_log(), now, cooldown):
+            log_event("rest", {"name": "(sit phase — rest)", "category": "posture"})
+            return 0
+        i = state.get("seat_idx", 0) % len(seated_pool)
+        ex = seated_pool[i]
+        state["seat_idx"] = (i + 1) % len(seated_pool)
+
+    # Stash which exercise the click should launch.
     state["pending"] = ex["id"]
     write_state(state)
     log_event("prompted", ex)
@@ -409,13 +464,14 @@ def cmd_session(args) -> int:
 
 
 def cmd_now(args) -> int:
-    """Do the next exercise right now, in this terminal. Completing it makes the
-    next scheduled nudge self-skip (see should_skip_notify)."""
-    exercises = load_exercises()
+    """Do the next exercise right now, in this terminal. You're opting to move,
+    so this always serves an upright exercise. Completing it makes the next
+    scheduled nudge self-skip (see should_skip_notify)."""
+    up_pool, _ = exercise_pools(load_exercises())
     state = read_state()
-    idx = state.get("index", 0) % len(exercises)
-    ex = exercises[idx]
-    state["index"] = (idx + 1) % len(exercises)
+    i = state.get("up_idx", 0) % len(up_pool)
+    ex = up_pool[i]
+    state["up_idx"] = (i + 1) % len(up_pool)
     state["pending"] = ex["id"]
     write_state(state)
     run_session(ex)
@@ -436,6 +492,7 @@ def cmd_next(args) -> int:
 
 
 def cmd_list(args) -> int:
+    verbose = getattr(args, "verbose", False)
     for i, ex in enumerate(load_exercises(), 1):
         flag = f" {C.GREEN}·work-friendly{C.RESET}" if ex.get("work_friendly") else ""
         print(
@@ -443,6 +500,13 @@ def cmd_list(args) -> int:
             f"{C.DIM}{CATEGORY_LABEL.get(ex['category']):<15}{C.RESET} "
             f"{human_duration(ex):<14}{flag}"
         )
+        if verbose:
+            if ex.get("equipment") and ex["equipment"] != "none":
+                print(f"    {C.DIM}gear: {ex['equipment']}{C.RESET}")
+            print(wrap(ex["cue"], width=72, indent="    "))
+            if ex.get("note"):
+                print(f"    {C.DIM}» {ex['note']}{C.RESET}")
+            print()
     return 0
 
 
@@ -813,6 +877,7 @@ DEFAULT_POSTURE = {
     "rotation": ["sit", "stand", "sit", "board"],
     "budgets_min": {"sit": 25, "stand": 12, "board": 18},
     "check_every_min": 5,
+    "nerve_rest_cooldown_min": 180,
 }
 
 
@@ -1062,11 +1127,13 @@ def cmd_menubar(args) -> int:
         action(f"Set: {p}", "pose", p)
 
     print("---")
-    print(f"Next exercise: {nxt_ex['name']}")
+    print(f"Next upright exercise: {nxt_ex['name']}")
+    if not current_posture_is_upright():
+        print("(sit phase — rests until you stand, minus occasional nerve work)")
     if ex_rem is not None:
         when = fires[0].strftime("%-I:%M")
         note = "  ⚠︎ will skip (moved recently)" if will_skip else ""
-        print(f"in {_fmt_dur(ex_rem)} ({when}){note}")
+        print(f"next check in {_fmt_dur(ex_rem)} ({when}){note}")
     print(f'Do it now | shell="{launcher}" param1="now" terminal=false refresh=true')
     print("---")
     print("Deskercise")
@@ -1089,7 +1156,10 @@ def main() -> int:
     )
     sub.add_parser("now")
     sub.add_parser("next")
-    sub.add_parser("list")
+    lp = sub.add_parser("list")
+    lp.add_argument(
+        "-v", "--verbose", action="store_true", help="also print each exercise's cue"
+    )
     dp = sub.add_parser("done")
     dp.add_argument("--id", help="specific exercise id")
     sub.add_parser("stats")

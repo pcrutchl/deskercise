@@ -148,38 +148,51 @@ def test_next_fire_returns_requested_count_in_order():
 # --- rotation (cmd_notify advances + wraps) ---------------------------------
 
 
-def _isolate_state(tmp_path, monkeypatch):
-    """Point state/log at a temp dir and record (instead of firing) notifications."""
+def _set_posture(posture):
+    d.write_posture(
+        {
+            "idx": 0,
+            "posture": posture,
+            "since": dt.datetime.now().isoformat(timespec="seconds"),
+            "paused": False,
+        }
+    )
+
+
+def _isolate_state(tmp_path, monkeypatch, posture="stand"):
+    """Point state/log at a temp dir, record (instead of firing) notifications,
+    and default the posture to upright so the exercise rotation is exercised."""
     monkeypatch.setattr(d, "state_dir", lambda: str(tmp_path))
     calls = []
     monkeypatch.setattr(d.subprocess, "run", lambda *a, **k: calls.append(a))
+    _set_posture(posture)
     return calls
 
 
 def test_rotation_advances_and_sets_pending(tmp_path, monkeypatch):
     _isolate_state(tmp_path, monkeypatch)
-    exercises = d.load_exercises()
+    up, _ = d.exercise_pools(d.load_exercises())
 
     d.cmd_notify(argparse.Namespace())
     st = d.read_state()
-    assert st["index"] == 1
-    assert st["pending"] == exercises[0]["id"]
+    assert st["up_idx"] == 1
+    assert st["pending"] == up[0]["id"]
 
     d.cmd_notify(argparse.Namespace())
     st = d.read_state()
-    assert st["index"] == 2
-    assert st["pending"] == exercises[1]["id"]
+    assert st["up_idx"] == 2
+    assert st["pending"] == up[1]["id"]
 
 
 def test_rotation_wraps_at_end(tmp_path, monkeypatch):
     _isolate_state(tmp_path, monkeypatch)
-    exercises = d.load_exercises()
-    d.write_state({"index": len(exercises) - 1, "pending": None})
+    up, _ = d.exercise_pools(d.load_exercises())
+    d.write_state({"up_idx": len(up) - 1, "seat_idx": 0, "pending": None})
 
     d.cmd_notify(argparse.Namespace())
     st = d.read_state()
-    assert st["index"] == 0
-    assert st["pending"] == exercises[-1]["id"]
+    assert st["up_idx"] == 0
+    assert st["pending"] == up[-1]["id"]
 
 
 # --- skip-if-recently-moved (should_skip_notify + cmd_notify integration) ----
@@ -218,12 +231,12 @@ def test_should_skip_uses_latest_completion():
 
 def test_notify_skips_and_holds_rotation_after_recent_completion(tmp_path, monkeypatch):
     calls = _isolate_state(tmp_path, monkeypatch)
-    d.write_state({"index": 3, "pending": None})
+    d.write_state({"up_idx": 3, "seat_idx": 0, "pending": None})
     d.log_event("completed", {"id": "x", "name": "X", "category": "knee"})  # just now
 
     d.cmd_notify(argparse.Namespace())
 
-    assert d.read_state()["index"] == 3  # rotation NOT advanced
+    assert d.read_state()["up_idx"] == 3  # rotation NOT advanced
     assert calls == []  # no notification fired
     assert "auto_skipped" in [r["event"] for r in d.read_log()]
 
@@ -233,7 +246,7 @@ def test_notify_fires_when_last_completion_is_old(tmp_path, monkeypatch):
     import os
 
     calls = _isolate_state(tmp_path, monkeypatch)
-    d.write_state({"index": 0, "pending": None})
+    d.write_state({"up_idx": 0, "seat_idx": 0, "pending": None})
     old = (dt.datetime.now() - dt.timedelta(minutes=30)).isoformat(timespec="seconds")
     with open(os.path.join(tmp_path, "log.csv"), "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=d.LOG_FIELDS)
@@ -251,8 +264,73 @@ def test_notify_fires_when_last_completion_is_old(tmp_path, monkeypatch):
 
     d.cmd_notify(argparse.Namespace())
 
-    assert d.read_state()["index"] == 1  # advanced
+    assert d.read_state()["up_idx"] == 1  # advanced
     assert len(calls) == 1  # notification fired
+
+
+# --- posture-matched exercise selection -------------------------------------
+
+
+def test_exercise_posture_classes():
+    assert d.exercise_posture({"category": "nerve"}) == "seated"
+    assert d.exercise_posture({"category": "knee"}) == "upright"
+    assert d.exercise_posture({"category": "balance"}) == "upright"
+    assert d.exercise_posture({"category": "knee", "posture": "seated"}) == "seated"
+
+
+def test_nerve_due():
+    now = dt.datetime(2026, 7, 14, 13, 0)
+    assert d.nerve_due([], now, 180) is True
+    recent = [_row("completed", now - dt.timedelta(minutes=60))]
+    recent[0]["category"] = "nerve"
+    assert d.nerve_due(recent, now, 180) is False
+    old = [_row("completed", now - dt.timedelta(minutes=200))]
+    old[0]["category"] = "nerve"
+    assert d.nerve_due(old, now, 180) is True
+
+
+def test_notify_upright_serves_upright_exercise(tmp_path, monkeypatch):
+    calls = _isolate_state(tmp_path, monkeypatch, posture="board")  # board == upright
+    up, _ = d.exercise_pools(d.load_exercises())
+    d.cmd_notify(argparse.Namespace())
+    assert d.read_state()["pending"] == up[0]["id"]
+    assert len(calls) == 1
+
+
+def test_notify_sit_phase_rests_when_nerve_not_due(tmp_path, monkeypatch):
+    import csv
+    import os
+
+    calls = _isolate_state(tmp_path, monkeypatch, posture="sit")
+    # Nerve done 60m ago: past min_gap (15m, so no skip) but within the nerve
+    # cooldown (180m) -> not due -> the sit phase rests.
+    old = (dt.datetime.now() - dt.timedelta(minutes=60)).isoformat(timespec="seconds")
+    with open(os.path.join(tmp_path, "log.csv"), "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=d.LOG_FIELDS)
+        w.writeheader()
+        w.writerow(
+            {
+                "timestamp": old,
+                "date": old[:10],
+                "event": "completed",
+                "exercise_id": "ulnar",
+                "exercise_name": "n",
+                "category": "nerve",
+            }
+        )
+    d.cmd_notify(argparse.Namespace())
+    assert calls == []  # no notification
+    assert d.read_state()["seat_idx"] == 0  # seated rotation not advanced
+    assert "rest" in [r["event"] for r in d.read_log()]
+
+
+def test_notify_sit_phase_serves_nerve_when_due(tmp_path, monkeypatch):
+    calls = _isolate_state(tmp_path, monkeypatch, posture="sit")
+    up, seated = d.exercise_pools(d.load_exercises())
+    d.cmd_notify(argparse.Namespace())
+    assert d.read_state()["pending"] == seated[0]["id"]  # a seated (nerve) move
+    assert d.read_state()["up_idx"] == 0  # upright rotation untouched
+    assert len(calls) == 1
 
 
 # --- posture rotation -------------------------------------------------------

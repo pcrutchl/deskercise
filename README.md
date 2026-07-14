@@ -17,7 +17,9 @@ Built around a specific setup: powered standing desk, FluidStance balance board,
   meeting starts — all configurable in `config.json`).
 - `notify` picks the next exercise in a **deterministic rotation** that cycles
   evenly through knee → hip → balance → upper-body → hand/forearm, and fires a
-  clickable macOS notification via `terminal-notifier`.
+  clickable macOS notification via `terminal-notifier`. Selection is
+  **posture-aware** (see below): when you're upright it serves a standing/board
+  exercise; when you're sitting it rests (with occasional seated nerve work).
 - **Clicking the notification** opens a right-sized Terminal window with the
   guided session: the instructions, then a **visual countdown** for each timed
   hold (with discrete sub-timers, e.g. "palm down 15s → palm up 15s → thumb up
@@ -149,6 +151,20 @@ interleaved between the two upright modes.
 - **Persistent by design:** if you ignore a nudge it keeps re-firing every check
   until you actually move. Use `posture-pause` for meetings; `posture-resume`
   restarts the timer.
+
+### Posture-matched exercises
+
+Almost every exercise needs you upright (only the two nerve moves are seated), so
+the exercise nudge respects your current posture instead of fighting it:
+
+- **Upright** (standing *or* on the board — they're interchangeable; step on/off
+  as the exercise needs): serves the next standing/board exercise.
+- **Sitting:** **rests** by default. The two seated nerve exercises are still
+  eligible — one is offered only if you haven't done nerve work in the last
+  `nerve_rest_cooldown_min` (default 180). Otherwise the nudge stays quiet and the
+  upright rotation waits until you stand.
+- `desknow` / the menu-bar **Do it now** always serve an upright exercise — if
+  you're reaching for it, you're choosing to move.
 
 ### Menu bar (xbar)
 
