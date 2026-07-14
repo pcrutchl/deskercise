@@ -1,0 +1,15 @@
+[project]
+name = "deskercise"
+version = "0.1.0"
+description = "Hourly macOS mobility nudges with guided timers and logging"
+requires-python = ">=3.10"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.uv]
+# deskercise.py is a flat script, not an installable package — don't try to build it.
+package = false
+
+[tool.pytest.ini_options]
+addopts = "-q"

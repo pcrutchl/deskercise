@@ -1,0 +1,17 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    # Tests are pure Python — no launchctl/osascript — so Linux is fine and fast.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: black --check
+        run: uvx black@26.5.1 --check .
+      - name: pytest
+        run: uv run pytest
