@@ -14,14 +14,17 @@ CMD="clear; python3 '$DIR/deskercise.py' $MODE"
 
 TTY="$(/usr/bin/osascript <<EOF
 tell application "iTerm"
-    activate
     set w to (create window with default profile)
+    set theTty to ""
     tell current session of w
         set rows to 28
         set columns to 76
         write text "$CMD"
-        return tty
+        set theTty to tty
     end tell
+    activate
+    tell w to select
+    return theTty
 end tell
 EOF
 )"

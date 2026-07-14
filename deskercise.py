@@ -995,6 +995,13 @@ def post_notification(
     subprocess.run(args)
 
 
+def _clear_posture_notification() -> None:
+    """Remove any lingering posture notification (the clicked nudge)."""
+    tn = terminal_notifier_path()
+    if tn is not None:
+        subprocess.run([tn, "-remove", POSTURE_LABEL], capture_output=True)
+
+
 def _set_posture(st: dict, posture: str, idx: int | None = None) -> None:
     st["posture"] = posture
     if idx is not None:
@@ -1013,13 +1020,9 @@ def cmd_pose(args) -> int:
     if getattr(args, "next", False):
         idx = (st.get("idx", 0) + 1) % len(rotation)
         _set_posture(st, rotation[idx], idx)
-        icon = POSTURE_ICONS.get(st["posture"], "")
-        post_notification(
-            load_config(),
-            "Posture",
-            f"{icon} now: {st['posture']}",
-            group=POSTURE_LABEL,
-        )
+        # Clear the nudge that triggered this. No confirm notification — it would
+        # persist inertly under Alerts style; the xbar menu bar shows state.
+        _clear_posture_notification()
         print(f"{C.GREEN}→ {st['posture']}{C.RESET}")
         return 0
 
@@ -1033,17 +1036,18 @@ def cmd_pose(args) -> int:
 
 
 def cmd_posture_check(args) -> int:
+    force = getattr(args, "force", False)  # fire now regardless of budget/window
     pc = posture_cfg()
-    if not pc.get("enabled", True):
+    if not force and not pc.get("enabled", True):
         return 0
     st = read_posture()
-    if st.get("paused"):
+    if not force and st.get("paused"):
         return 0
     cfg = load_config()
     now = dt.datetime.now()
-    if not in_work_window(cfg, now):
+    if not force and not in_work_window(cfg, now):
         return 0
-    if posture_remaining(st, pc, now) <= 0:
+    if force or posture_remaining(st, pc, now) <= 0:
         elapsed = int(
             (now - dt.datetime.fromisoformat(st["since"])).total_seconds() // 60
         )
@@ -1216,7 +1220,10 @@ def main() -> int:
     pp = sub.add_parser("pose")
     pp.add_argument("posture", nargs="?", choices=["sit", "stand", "board"])
     pp.add_argument("--next", action="store_true", help="advance to the next posture")
-    sub.add_parser("posture-check")
+    pcp = sub.add_parser("posture-check")
+    pcp.add_argument(
+        "--force", action="store_true", help="fire a nudge now (ignore budget/window)"
+    )
     sub.add_parser("posture-pause")
     sub.add_parser("posture-resume")
     psp = sub.add_parser("posture-status")
