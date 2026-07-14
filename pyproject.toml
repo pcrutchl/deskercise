@@ -11,5 +11,10 @@ dev = ["pytest>=8"]
 # deskercise.py is a flat script, not an installable package — don't try to build it.
 package = false
 
+[tool.black]
+# Pin the target so black's output + AST safety check are deterministic across
+# interpreters (avoids the "can't parse py3.15" warning on older Pythons).
+target-version = ["py310"]
+
 [tool.pytest.ini_options]
 addopts = "-q"
