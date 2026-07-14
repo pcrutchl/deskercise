@@ -1,11 +1,20 @@
 #!/bin/bash
 # Invoked by terminal-notifier's -execute when the notification is clicked.
-# Opens a Terminal.app window and runs the guided session for the pending exercise.
+# Opens a right-sized Terminal.app window, runs the guided session, and closes
+# the window automatically once the session process exits.
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 /usr/bin/osascript <<EOF
 tell application "Terminal"
     activate
-    do script "clear; python3 '$DIR/deskercise.py' session; exit"
+    set theTab to do script "clear; python3 '$DIR/deskercise.py' session"
+    set theWindow to window 1
+    set number of columns of theWindow to 74
+    set number of rows of theWindow to 26
+    delay 1
+    repeat while busy of theTab
+        delay 0.5
+    end repeat
+    close theWindow saving no
 end tell
 EOF

@@ -16,10 +16,11 @@ Built around a specific setup: powered standing desk, FluidStance balance board,
 - `notify` picks the next exercise in a **deterministic rotation** that cycles
   evenly through knee → hip → balance → upper-body → hand/forearm, and fires a
   clickable macOS notification via `terminal-notifier`.
-- **Clicking the notification** opens a Terminal window with the guided session:
-  the instructions, then a **visual countdown** for each timed hold (with discrete
-  sub-timers, e.g. "palm down 15s → palm up 15s → thumb up 15s"), or a
-  press-Enter-when-done prompt for rep-based moves.
+- **Clicking the notification** opens a right-sized Terminal window with the
+  guided session: the instructions, then a **visual countdown** for each timed
+  hold (with discrete sub-timers, e.g. "palm down 15s → palm up 15s → thumb up
+  15s"), or a press-Enter-when-done prompt for rep-based moves. The window
+  **closes itself** when the session ends.
 - Finishing logs a completion. `stats` shows today's tally, your streak, and
   lifetime total.
 
@@ -93,6 +94,7 @@ Edit `config.json`, then re-run `./deskercise install` to apply:
   "weekdays": [1, 2, 3, 4, 5],
   "minute": 10,
   "min_gap_minutes": 15,
+  "ignore_dnd": true,
   "sound": "Ping",
   "title": "Deskercise",
   "state_dir": "~/.deskercise"
@@ -102,6 +104,8 @@ Edit `config.json`, then re-run `./deskercise install` to apply:
 - `weekdays` uses launchd's convention: `0`/`7` = Sunday, `1` = Monday … `6` = Saturday.
 - `minute` is the minutes-past-the-hour each nudge fires.
 - `min_gap_minutes` is the skip-if-you-just-moved window described above.
+- `ignore_dnd` (`-ignoreDnD`): when true, nudges fire even during Focus / Do Not
+  Disturb. Set false if you'd rather Focus modes suppress them.
 - Runtime state (rotation position + `log.csv`) lives in `state_dir`, outside the repo.
 
 ## Editing the exercises

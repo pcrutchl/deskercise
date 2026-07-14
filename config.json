@@ -4,6 +4,7 @@
   "weekdays": [1, 2, 3, 4, 5],
   "minute": 10,
   "min_gap_minutes": 15,
+  "ignore_dnd": true,
   "sound": "Ping",
   "title": "Deskercise",
   "state_dir": "~/.deskercise"

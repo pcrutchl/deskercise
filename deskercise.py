@@ -232,23 +232,24 @@ def cmd_notify(args) -> int:
         )
         return 0
 
-    subprocess.run(
-        [
-            tn,
-            "-title",
-            cfg["title"],
-            "-subtitle",
-            subtitle,
-            "-message",
-            message,
-            "-sound",
-            cfg.get("sound", "Ping"),
-            "-group",
-            LABEL,
-            "-execute",
-            f'"{launcher}"',
-        ]
-    )
+    tn_args = [
+        tn,
+        "-title",
+        cfg["title"],
+        "-subtitle",
+        subtitle,
+        "-message",
+        message,
+        "-sound",
+        cfg.get("sound", "Ping"),
+        "-group",
+        LABEL,
+        "-execute",
+        f'"{launcher}"',
+    ]
+    if cfg.get("ignore_dnd"):
+        tn_args.append("-ignoreDnD")  # break through Focus / Do Not Disturb
+    subprocess.run(tn_args)
     return 0
 
 
@@ -362,7 +363,8 @@ def run_session(ex: dict) -> None:
     except KeyboardInterrupt:
         print()
         log_event("skipped", ex)
-        print(f"\n  {C.YELLOW}skipped — logged. no worries.{C.RESET}\n")
+        print(f"\n  {C.YELLOW}skipped — logged. no worries.{C.RESET}")
+        _linger(2)
         return
 
     log_event("completed", ex)
@@ -371,9 +373,16 @@ def run_session(ex: dict) -> None:
     if ex.get("note"):
         print(f"  {C.DIM}{ex['note']}{C.RESET}")
     print()
+    print(f"  {C.DIM}closing…{C.RESET}")
+    _linger(6)
+
+
+def _linger(seconds: int) -> None:
+    """Brief pause so the summary is readable before the window auto-closes
+    (see bin/launch-session). Ctrl-C skips the wait."""
     try:
-        input(f"  {C.DIM}press Enter to close…{C.RESET} ")
-    except (EOFError, KeyboardInterrupt):
+        time.sleep(seconds)
+    except KeyboardInterrupt:
         pass
 
 
