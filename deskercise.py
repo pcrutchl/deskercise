@@ -291,15 +291,15 @@ def run_session(ex: dict) -> None:
     print()
 
     try:
-        for n in (3, 2, 1):
-            print(f"\r  {C.DIM}get into position… {n}{C.RESET}   ", end="", flush=True)
+        for n in range(8, 0, -1):
+            print(f"\r  {C.DIM}read the cue, get into position… {n}{C.RESET}   ", end="", flush=True)
             time.sleep(1)
-        print("\r" + " " * 40)
+        print("\r" + " " * 48)
 
         for i, seg in enumerate(ex["segments"]):
             if i > 0:
                 print(f"  {C.YELLOW}▸ switch{C.RESET}")
-                time.sleep(1)
+                time.sleep(4)
             if "steps" in seg:
                 print(f"  {C.BOLD}{seg['label']}{C.RESET}")
                 for j, step in enumerate(seg["steps"]):
