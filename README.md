@@ -207,6 +207,14 @@ is one of:
 The rotation is just the file order, laid out to interleave categories. Add or
 reorder freely.
 
+## Reference images (optional)
+
+Drop an image at `media/<exercise_id>.<ext>` (`png`/`jpg`/`jpeg`/`gif`/`webp`)
+and it renders inline at the top of that exercise's guided session — in **iTerm2
+only** (via its inline-image protocol; silently skipped elsewhere). The `id`s and
+naming are documented in [`media/README.md`](media/README.md). Image files are
+gitignored, so they stay local and never get committed.
+
 ## Development
 
 Pure-stdlib runtime — no dependencies to run. Dev tooling is managed with uv:

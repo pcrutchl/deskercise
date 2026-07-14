@@ -7,3 +7,11 @@ __pycache__/
 .DS_Store
 .venv/
 .pytest_cache/
+
+# Exercise reference images are kept local (avoids committing copyrighted images
+# to the public repo). media/README.md is still tracked.
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp

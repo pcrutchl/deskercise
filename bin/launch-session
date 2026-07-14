@@ -17,8 +17,8 @@ tell application "iTerm"
     activate
     set w to (create window with default profile)
     tell current session of w
-        set rows to 26
-        set columns to 74
+        set rows to 28
+        set columns to 76
         write text "$CMD"
         return tty
     end tell

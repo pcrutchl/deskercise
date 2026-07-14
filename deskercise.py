@@ -30,6 +30,7 @@ Posture rotation (a separate dwell-state subsystem — sit/stand/board):
 from __future__ import annotations
 
 import argparse
+import base64
 import csv
 import datetime as dt
 import json
@@ -390,6 +391,36 @@ def rep_segment(label: str, reps: int) -> None:
         pass
 
 
+IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".webp")
+
+
+def exercise_image(ex: dict) -> str | None:
+    """Find media/<exercise_id>.<ext> if the user has dropped one in."""
+    for ext in IMAGE_EXTS:
+        path = os.path.join(SCRIPT_DIR, "media", ex["id"] + ext)
+        if os.path.exists(path):
+            return path
+    return None
+
+
+def show_image(path: str, height_cells: int = 11) -> None:
+    """Render an image inline using the iTerm2 protocol. No-op outside iTerm2."""
+    if os.environ.get("TERM_PROGRAM") != "iTerm.app":
+        return
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except OSError:
+        return
+    payload = base64.b64encode(data).decode()
+    name = base64.b64encode(os.path.basename(path).encode()).decode()
+    sys.stdout.write(
+        f"\033]1337;File=name={name};size={len(data)};inline=1;"
+        f"height={height_cells};preserveAspectRatio=1:{payload}\a\n"
+    )
+    sys.stdout.flush()
+
+
 def run_session(ex: dict) -> None:
     clear()
     cat = CATEGORY_LABEL.get(ex["category"], ex["category"])
@@ -400,6 +431,10 @@ def run_session(ex: dict) -> None:
         print(f"  {C.DIM}gear: {ex['equipment']}{C.RESET}")
     print()
     print(wrap(ex["cue"]))
+    img = exercise_image(ex)
+    if img:
+        print()
+        show_image(img)
     print()
 
     try:
