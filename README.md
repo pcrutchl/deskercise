@@ -3,6 +3,8 @@
 Hourly macOS nudges to do knee-stability, hip-mobility, balance, upper-body, and
 hand/forearm work without leaving your desk. Native notifications (clickable),
 guided visual countdowns, and a log so you can prove to yourself you did them.
+Plus a separate **posture-rotation** layer (sit / stand / balance board) with an
+optional xbar menu-bar dashboard.
 
 Built around a specific setup: powered standing desk, FluidStance balance board,
 7' PVC pipe, and a gyro-ball forearm exerciser — with a cyclist's needs in mind
@@ -46,12 +48,13 @@ brew install terminal-notifier      # clickable notifications
 ./deskercise install                # loads the launchd agent + installs shortcuts
 ```
 
-`install` also drops two commands into `~/.local/bin` (on your PATH):
+`install` also:
 
-- **`desknow`** — do the next exercise right now, in the current terminal.
-- **`deskercise`** — the full CLI, runnable from anywhere.
-
-If `~/.local/bin` isn't on your PATH, `install` prints the `export PATH=…` line to add.
+- Drops two commands into `~/.local/bin` (on your PATH): **`desknow`** (do the
+  next exercise now, in the current terminal) and **`deskercise`** (the full CLI).
+  If `~/.local/bin` isn't on your PATH, it prints the `export PATH=…` line to add.
+- Loads the **posture-rotation agent** and, if [xbar](https://xbarapp.com) is
+  installed, drops in the **menu-bar plugin** (see *Posture rotation* below).
 
 Then, **one-time macOS setup** so the nudges are hard to ignore:
 
@@ -78,9 +81,20 @@ Test it immediately:
 | `deskercise done [--id ID]` | Log a completion manually (no timer). |
 | `deskercise stats` | Today's count, current streak, lifetime total. |
 | `deskercise recent [N]` | Show the last N log entries. |
-| `deskercise install` | (Re)load the agent + shortcuts from `config.json`. |
-| `deskercise uninstall` | Remove the agent + shortcuts (keeps your log). |
+| `deskercise install` | (Re)load both agents + shortcuts + xbar plugin from `config.json`. |
+| `deskercise uninstall` | Remove agents + shortcuts + xbar plugin (keeps your log). |
 | `deskercise doctor` | Check dependencies, agent status, and next fire times. |
+
+**Posture rotation:**
+
+| Command | What it does |
+| --- | --- |
+| `deskercise pose` | Show current posture, elapsed, and time left. |
+| `deskercise pose sit\|stand\|board` | Set the current posture (resets the timer). |
+| `deskercise pose --next` | Advance to the next posture in the rotation. |
+| `deskercise posture-pause` / `posture-resume` | Silence nudges (meetings) / restart the timer. |
+| `deskercise posture-status [--json]` | Current posture state. |
+| `deskercise menubar` | Emit the xbar dashboard (used by the plugin). |
 
 (From the repo you can also invoke these as `./deskercise <cmd>` before installing.)
 
@@ -97,7 +111,13 @@ Edit `config.json`, then re-run `./deskercise install` to apply:
   "ignore_dnd": true,
   "sound": "Ping",
   "title": "Deskercise",
-  "state_dir": "~/.deskercise"
+  "state_dir": "~/.deskercise",
+  "posture": {
+    "enabled": true,
+    "rotation": ["sit", "stand", "sit", "board"],
+    "budgets_min": { "sit": 25, "stand": 12, "board": 18 },
+    "check_every_min": 5
+  }
 }
 ```
 
@@ -106,7 +126,50 @@ Edit `config.json`, then re-run `./deskercise install` to apply:
 - `min_gap_minutes` is the skip-if-you-just-moved window described above.
 - `ignore_dnd` (`-ignoreDnD`): when true, nudges fire even during Focus / Do Not
   Disturb. Set false if you'd rather Focus modes suppress them.
+- `posture`: the posture-rotation subsystem — see below. `rotation` is the order
+  (repeats allowed, e.g. `sit` between the two upright modes); `budgets_min` is
+  the dwell cap per posture; `check_every_min` is how often the agent checks.
 - Runtime state (rotation position + `log.csv`) lives in `state_dir`, outside the repo.
+
+## Posture rotation (menu bar)
+
+Separate from the acute exercise nudges, this manages a **dwell state** — where
+your body is *right now* — and rotates you through **sit → stand → sit → board**
+so you never sit (or stand) too long. It's grounded in the movement-break
+research: uninterrupted sitting ≥30 min independently raises risk, and static
+standing is also fatiguing — so no posture is safe to camp in, and `sit` is
+interleaved between the two upright modes.
+
+- A second launchd agent (`posture-check`, every 5 min during work hours) fires a
+  notification when the current posture exceeds its dwell budget: *"sit 27m →
+  switch to stand."* **Clicking it advances the state.**
+- There's no sensor to detect sit/stand on a dumb desk (and Apple Silicon Macs
+  have no accelerometer anyway), so state is **confirm-on-transition**: you click
+  the nudge, or run `deskercise pose <sit|stand|board>` if you go off-script.
+- **Persistent by design:** if you ignore a nudge it keeps re-firing every check
+  until you actually move. Use `posture-pause` for meetings; `posture-resume`
+  restarts the timer.
+
+### Menu bar (xbar)
+
+If you have [xbar](https://xbarapp.com), `install` adds a menu-bar dashboard
+(`~/Library/Application Support/xbar/plugins/deskercise.30s.sh`) showing your
+current posture + time left **and** the next exercise + countdown:
+
+```
+🪑 12m · ⏱23m         ← posture remaining · time to next exercise
+──────────────
+Posture: sit · 13m / 25m
+Advance → stand
+Pause
+Set: sit / stand / board
+──────────────
+Next exercise: Single-leg mini squats
+in 23m (1:10)
+Do it now            ← opens the guided session window
+```
+
+Refresh xbar (⌘R) after install to see it.
 
 ## Editing the exercises
 

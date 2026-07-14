@@ -14,9 +14,17 @@ Subcommands:
   stats               Today's tally, current streak, and lifetime total.
   recent [N]          Show the last N log entries (default 15).
   done [--id ID]      Manually log a completion (no timer).
-  install             Generate + load the launchd agent from config.json.
-  uninstall           Unload + remove the launchd agent.
+  install             Generate + load the launchd agents + shortcuts.
+  uninstall           Unload + remove the launchd agents + shortcuts.
   doctor              Check dependencies and agent status.
+
+Posture rotation (a separate dwell-state subsystem — sit/stand/board):
+  pose [sit|stand|board]   Set the current posture (no arg: show status).
+  pose --next              Advance to the next posture in the rotation.
+  posture-check            Nudge if the current posture is over budget (agent).
+  posture-pause / -resume  Silence nudges (e.g. meetings) / restart the timer.
+  posture-status [--json]  Show current posture, elapsed, and remaining.
+  menubar                  Emit the xbar menu-bar dashboard.
 """
 
 from __future__ import annotations
@@ -27,6 +35,7 @@ import datetime as dt
 import json
 import os
 import plistlib
+import shlex
 import shutil
 import subprocess
 import sys
@@ -34,6 +43,8 @@ import time
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 LABEL = "com.deskercise.reminder"
+POSTURE_LABEL = "com.deskercise.posture"
+POSTURE_ICONS = {"sit": "🪑", "stand": "🧍", "board": "🛹"}
 
 # ---------------------------------------------------------------------------
 # Config / paths
@@ -568,6 +579,76 @@ def remove_shims() -> None:
                 os.remove(path)
 
 
+def posture_plist_path() -> str:
+    return os.path.expanduser(f"~/Library/LaunchAgents/{POSTURE_LABEL}.plist")
+
+
+def build_posture_plist() -> dict:
+    pc = posture_cfg()
+    sd = state_dir()
+    return {
+        "Label": POSTURE_LABEL,
+        "ProgramArguments": [
+            sys.executable,
+            os.path.join(SCRIPT_DIR, "deskercise.py"),
+            "posture-check",
+        ],
+        "StartInterval": int(pc.get("check_every_min", 5)) * 60,
+        "StandardOutPath": os.path.join(sd, "posture.out.log"),
+        "StandardErrorPath": os.path.join(sd, "posture.err.log"),
+        "EnvironmentVariables": {
+            "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        },
+        "ProcessType": "Interactive",
+    }
+
+
+XBAR_PLUGIN = "deskercise.30s.sh"
+
+
+def xbar_plugins_dir() -> str | None:
+    """The xbar plugins dir, or None if xbar isn't installed."""
+    base = os.path.expanduser("~/Library/Application Support/xbar")
+    return os.path.join(base, "plugins") if os.path.isdir(base) else None
+
+
+def install_xbar() -> str | None:
+    d = xbar_plugins_dir()
+    if d is None:
+        return None
+    os.makedirs(d, exist_ok=True)
+    path = os.path.join(d, XBAR_PLUGIN)
+    script = os.path.join(SCRIPT_DIR, "deskercise.py")
+    with open(path, "w") as f:
+        f.write(f'#!/bin/bash\nexec "{sys.executable}" "{script}" menubar\n')
+    os.chmod(path, 0o755)
+    return path
+
+
+def remove_xbar() -> None:
+    d = xbar_plugins_dir()
+    if d is None:
+        return
+    path = os.path.join(d, XBAR_PLUGIN)
+    if os.path.isfile(path):
+        os.remove(path)
+
+
+def _reload_agent(plist: str) -> bool:
+    """bootout then bootstrap a launchd agent (with an older-macOS fallback)."""
+    domain = f"gui/{os.getuid()}"
+    subprocess.run(["launchctl", "bootout", domain, plist], capture_output=True)
+    r = subprocess.run(
+        ["launchctl", "bootstrap", domain, plist], capture_output=True, text=True
+    )
+    if r.returncode != 0:
+        subprocess.run(["launchctl", "unload", plist], capture_output=True)
+        r = subprocess.run(
+            ["launchctl", "load", "-w", plist], capture_output=True, text=True
+        )
+    return r.returncode == 0
+
+
 def cmd_install(args) -> int:
     if terminal_notifier_path() is None:
         print(
@@ -580,36 +661,42 @@ def cmd_install(args) -> int:
     os.makedirs(os.path.dirname(plist_path()), exist_ok=True)
     with open(plist_path(), "wb") as f:
         plistlib.dump(build_plist(), f)
-    print(f"wrote {plist_path()}")
-
-    uid = os.getuid()
-    domain = f"gui/{uid}"
-    subprocess.run(
-        ["launchctl", "bootout", domain, plist_path()],
-        capture_output=True,
-    )
-    r = subprocess.run(
-        ["launchctl", "bootstrap", domain, plist_path()],
-        capture_output=True,
-        text=True,
-    )
-    if r.returncode != 0:
-        # Older macOS fallback.
-        subprocess.run(["launchctl", "unload", plist_path()], capture_output=True)
-        r = subprocess.run(
-            ["launchctl", "load", "-w", plist_path()], capture_output=True, text=True
-        )
-        if r.returncode != 0:
-            print(f"{C.YELLOW}launchctl error:{C.RESET} {r.stderr.strip()}")
-            return 1
+    if not _reload_agent(plist_path()):
+        print(f"{C.YELLOW}launchctl error loading exercise agent.{C.RESET}")
+        return 1
 
     cfg = load_config()
     minute = cfg.get("minute", 0)
-    print(f"{C.GREEN}✓ agent loaded.{C.RESET}")
+    print(f"{C.GREEN}✓ exercise agent loaded.{C.RESET}")
     print(
         f"  schedule: {cfg['hours'][0]}:{minute:02d}–{cfg['hours'][-1]}:{minute:02d}, "
         f"hourly, weekdays.\n"
     )
+
+    # Posture rotation agent + xbar menu-bar plugin.
+    pc = posture_cfg()
+    if pc.get("enabled", True):
+        if not os.path.exists(posture_state_path()):
+            write_posture(read_posture())  # seed initial state
+        with open(posture_plist_path(), "wb") as f:
+            plistlib.dump(build_posture_plist(), f)
+        if _reload_agent(posture_plist_path()):
+            print(
+                f"{C.GREEN}✓ posture agent loaded.{C.RESET}  "
+                f"rotation: {' → '.join(pc['rotation'])} "
+                f"(every {pc.get('check_every_min', 5)}m)"
+            )
+        xb = install_xbar()
+        if xb:
+            print(f"{C.GREEN}✓ xbar plugin installed:{C.RESET} {xb}")
+            print(
+                f"  {C.DIM}refresh xbar (or ⌘R) to see the menu-bar dashboard{C.RESET}\n"
+            )
+        else:
+            print(
+                f"  {C.DIM}xbar not detected — menu bar skipped. "
+                f"Install xbar, then re-run install.{C.RESET}\n"
+            )
 
     shims = install_shims()
     print(f"{C.GREEN}✓ shell commands installed:{C.RESET} " + ", ".join(SHIMS))
@@ -637,16 +724,18 @@ def cmd_install(args) -> int:
 
 def cmd_uninstall(args) -> int:
     uid = os.getuid()
-    subprocess.run(
-        ["launchctl", "bootout", f"gui/{uid}", plist_path()], capture_output=True
-    )
-    subprocess.run(["launchctl", "unload", plist_path()], capture_output=True)
-    if os.path.exists(plist_path()):
-        os.remove(plist_path())
-        print(f"removed {plist_path()}")
+    for plist in (plist_path(), posture_plist_path()):
+        subprocess.run(
+            ["launchctl", "bootout", f"gui/{uid}", plist], capture_output=True
+        )
+        subprocess.run(["launchctl", "unload", plist], capture_output=True)
+        if os.path.exists(plist):
+            os.remove(plist)
+            print(f"removed {plist}")
     remove_shims()
-    print(f"removed shell commands: {', '.join(SHIMS)}")
-    print(f"{C.GREEN}✓ agent unloaded.{C.RESET} (Your log in {state_dir()} was kept.)")
+    remove_xbar()
+    print(f"removed shell commands: {', '.join(SHIMS)} (+ xbar plugin if present)")
+    print(f"{C.GREEN}✓ agents unloaded.{C.RESET} (Your log in {state_dir()} was kept.)")
     return 0
 
 
@@ -663,10 +752,16 @@ def cmd_doctor(args) -> int:
     )
 
     uid = os.getuid()
-    r = subprocess.run(
-        ["launchctl", "print", f"gui/{uid}/{LABEL}"], capture_output=True, text=True
+    for label, name in ((LABEL, "exercise agent"), (POSTURE_LABEL, "posture agent")):
+        r = subprocess.run(
+            ["launchctl", "print", f"gui/{uid}/{label}"], capture_output=True, text=True
+        )
+        print(f"  {ok if r.returncode == 0 else no} {name} loaded in launchd")
+    xb = xbar_plugins_dir()
+    xb_ok = xb is not None and os.path.isfile(os.path.join(xb, XBAR_PLUGIN))
+    print(
+        f"  {ok if xb_ok else no} xbar plugin: {'installed' if xb_ok else 'not installed'}"
     )
-    print(f"  {ok if r.returncode == 0 else no} agent loaded in launchd")
     print(f"  {ok} python: {sys.executable}")
     print(f"  {ok} state dir: {state_dir()}")
 
@@ -700,6 +795,284 @@ def next_fire_times(cfg: dict, now: dt.datetime, count: int = 3) -> list[dt.date
     return out
 
 
+def in_work_window(cfg: dict, now: dt.datetime) -> bool:
+    """True on a configured weekday within [min(hours), max(hours)]."""
+    wd = (now.weekday() + 1) % 7  # launchd convention: Mon=1..Sun=0
+    weekdays = set(cfg.get("weekdays", [1, 2, 3, 4, 5]))
+    day_ok = wd in weekdays or (wd == 0 and 7 in weekdays)
+    hours = cfg.get("hours", [9, 17])
+    return day_ok and (min(hours) <= now.hour <= max(hours))
+
+
+# ---------------------------------------------------------------------------
+# posture rotation (dwell-state subsystem)
+# ---------------------------------------------------------------------------
+
+DEFAULT_POSTURE = {
+    "enabled": True,
+    "rotation": ["sit", "stand", "sit", "board"],
+    "budgets_min": {"sit": 25, "stand": 12, "board": 18},
+    "check_every_min": 5,
+}
+
+
+def posture_cfg() -> dict:
+    c = dict(DEFAULT_POSTURE)
+    c.update(load_config().get("posture", {}))
+    return c
+
+
+def posture_state_path() -> str:
+    return os.path.join(state_dir(), "posture.json")
+
+
+def read_posture() -> dict:
+    pc = posture_cfg()
+    try:
+        with open(posture_state_path()) as f:
+            st = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        st = {}
+    st.setdefault("idx", 0)
+    st.setdefault("posture", pc["rotation"][st["idx"] % len(pc["rotation"])])
+    st.setdefault("since", dt.datetime.now().isoformat(timespec="seconds"))
+    st.setdefault("paused", False)
+    return st
+
+
+def write_posture(st: dict) -> None:
+    with open(posture_state_path(), "w") as f:
+        json.dump(st, f, indent=2)
+
+
+def next_posture(st: dict, pc: dict) -> str:
+    rot = pc["rotation"]
+    return rot[(st.get("idx", 0) + 1) % len(rot)]
+
+
+def posture_remaining(st: dict, pc: dict, now: dt.datetime) -> float:
+    """Minutes left in the current posture's budget (negative = over)."""
+    since = dt.datetime.fromisoformat(st["since"])
+    budget = pc["budgets_min"].get(st["posture"], 20)
+    return budget - (now - since).total_seconds() / 60
+
+
+def _posture_lines(st, pc, now):
+    budget = pc["budgets_min"].get(st["posture"], 20)
+    remaining = int(round(posture_remaining(st, pc, now)))
+    return budget - remaining, budget, remaining, next_posture(st, pc)
+
+
+def post_notification(
+    cfg, title, message, subtitle="", group=None, execute=None
+) -> None:
+    """Fire a macOS notification (terminal-notifier, osascript fallback)."""
+    tn = terminal_notifier_path()
+    if tn is None:
+        subprocess.run(
+            [
+                "/usr/bin/osascript",
+                "-e",
+                f"display notification {json.dumps(message)} with title {json.dumps(title)}",
+            ]
+        )
+        return
+    args = [tn, "-title", title, "-message", message]
+    if subtitle:
+        args += ["-subtitle", subtitle]
+    args += ["-sound", cfg.get("sound", "Ping")]
+    if group:
+        args += ["-group", group]
+    if execute:
+        args += ["-execute", execute]
+    if cfg.get("ignore_dnd"):
+        args.append("-ignoreDnD")
+    subprocess.run(args)
+
+
+def _set_posture(st: dict, posture: str, idx: int | None = None) -> None:
+    st["posture"] = posture
+    if idx is not None:
+        st["idx"] = idx
+    st["since"] = dt.datetime.now().isoformat(timespec="seconds")
+    st["paused"] = False
+    write_posture(st)
+    log_event("posture", {"name": f"→ {posture}", "category": "posture"})
+
+
+def cmd_pose(args) -> int:
+    pc = posture_cfg()
+    rotation = pc["rotation"]
+    st = read_posture()
+
+    if getattr(args, "next", False):
+        idx = (st.get("idx", 0) + 1) % len(rotation)
+        _set_posture(st, rotation[idx], idx)
+        icon = POSTURE_ICONS.get(st["posture"], "")
+        post_notification(
+            load_config(),
+            "Posture",
+            f"{icon} now: {st['posture']}",
+            group=POSTURE_LABEL,
+        )
+        print(f"{C.GREEN}→ {st['posture']}{C.RESET}")
+        return 0
+
+    if getattr(args, "posture", None):
+        p = args.posture
+        _set_posture(st, p, rotation.index(p) if p in rotation else st.get("idx", 0))
+        print(f"{C.GREEN}→ {p}{C.RESET}")
+        return 0
+
+    return cmd_posture_status(args)
+
+
+def cmd_posture_check(args) -> int:
+    pc = posture_cfg()
+    if not pc.get("enabled", True):
+        return 0
+    st = read_posture()
+    if st.get("paused"):
+        return 0
+    cfg = load_config()
+    now = dt.datetime.now()
+    if not in_work_window(cfg, now):
+        return 0
+    if posture_remaining(st, pc, now) <= 0:
+        elapsed = int(
+            (now - dt.datetime.fromisoformat(st["since"])).total_seconds() // 60
+        )
+        nxt = next_posture(st, pc)
+        icon = POSTURE_ICONS.get(st["posture"], "")
+        advance = (
+            f"{shlex.quote(sys.executable)} "
+            f"{shlex.quote(os.path.join(SCRIPT_DIR, 'deskercise.py'))} pose --next"
+        )
+        post_notification(
+            cfg,
+            "Posture",
+            f"{icon} {st['posture']} {elapsed}m → switch to {nxt}",
+            group=POSTURE_LABEL,
+            execute=advance,
+        )
+    return 0
+
+
+def cmd_posture_pause(args) -> int:
+    st = read_posture()
+    st["paused"] = True
+    write_posture(st)
+    print("posture nudges paused (resume with: deskercise posture-resume)")
+    return 0
+
+
+def cmd_posture_resume(args) -> int:
+    st = read_posture()
+    st["paused"] = False
+    st["since"] = dt.datetime.now().isoformat(timespec="seconds")
+    write_posture(st)
+    print(f"{C.GREEN}resumed{C.RESET} — {st['posture']} timer reset")
+    return 0
+
+
+def cmd_posture_status(args) -> int:
+    pc = posture_cfg()
+    st = read_posture()
+    now = dt.datetime.now()
+    elapsed, budget, remaining, nxt = _posture_lines(st, pc, now)
+    if getattr(args, "json", False):
+        print(
+            json.dumps(
+                {
+                    "posture": st["posture"],
+                    "elapsed_min": elapsed,
+                    "budget_min": budget,
+                    "remaining_min": remaining,
+                    "next": nxt,
+                    "paused": st.get("paused", False),
+                }
+            )
+        )
+        return 0
+    icon = POSTURE_ICONS.get(st["posture"], "")
+    paused = f" {C.YELLOW}(paused){C.RESET}" if st.get("paused") else ""
+    print()
+    print(
+        f"  {icon} {C.BOLD}{st['posture']}{C.RESET}{paused} — "
+        f"{elapsed}m of {budget}m, {C.CYAN}{remaining}m left{C.RESET}"
+    )
+    print(f"  {C.DIM}next: {nxt}{C.RESET}")
+    print()
+    return 0
+
+
+def _fmt_dur(m: int | None) -> str:
+    if m is None:
+        return "—"
+    if m >= 60:
+        return f"{m // 60}h{m % 60:02d}m"
+    return f"{m}m"
+
+
+def cmd_menubar(args) -> int:
+    """Emit the xbar dashboard: posture in the title, plus the next exercise."""
+    pc = posture_cfg()
+    st = read_posture()
+    now = dt.datetime.now()
+    p_elapsed, p_budget, p_remaining, p_next = _posture_lines(st, pc, now)
+
+    cfg = load_config()
+    nxt_ex = peek_next(load_exercises())
+    fires = next_fire_times(cfg, now, 1)
+    ex_rem = int((fires[0] - now).total_seconds() // 60) if fires else None
+    will_skip = bool(
+        fires
+        and should_skip_notify(read_log(), fires[0], cfg.get("min_gap_minutes", 15))
+    )
+
+    picon = POSTURE_ICONS.get(st["posture"], "")
+    if st.get("paused"):
+        title, color = f"{picon} paused", ""
+    elif p_remaining > 0:
+        title, color = f"{picon} {p_remaining}m", ""
+    else:
+        title, color = f"{picon} +{-p_remaining}m", " | color=red"
+    ex_part = f" · ⏱{_fmt_dur(ex_rem)}" if ex_rem is not None else ""
+    print(f"{title}{ex_part}{color}")
+    print("---")
+
+    py = sys.executable
+    script = os.path.join(SCRIPT_DIR, "deskercise.py")
+    launcher = os.path.join(SCRIPT_DIR, "bin", "launch-session")
+
+    def action(label, *params):
+        attrs = [f'shell="{py}"', f'param1="{script}"']
+        for i, pv in enumerate(params, start=2):
+            attrs.append(f'param{i}="{pv}"')
+        attrs += ["terminal=false", "refresh=true"]
+        print(f"{label} | " + " ".join(attrs))
+
+    print(f"Posture: {st['posture']} · {p_elapsed}m / {p_budget}m")
+    action(f"Advance → {p_next}", "pose", "--next")
+    if st.get("paused"):
+        action("Resume", "posture-resume")
+    else:
+        action("Pause", "posture-pause")
+    for p in ("sit", "stand", "board"):
+        action(f"Set: {p}", "pose", p)
+
+    print("---")
+    print(f"Next exercise: {nxt_ex['name']}")
+    if ex_rem is not None:
+        when = fires[0].strftime("%-I:%M")
+        note = "  ⚠︎ will skip (moved recently)" if will_skip else ""
+        print(f"in {_fmt_dur(ex_rem)} ({when}){note}")
+    print(f'Do it now | shell="{launcher}" param1="now" terminal=false refresh=true')
+    print("---")
+    print("Deskercise")
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
@@ -726,6 +1099,16 @@ def main() -> int:
     sub.add_parser("uninstall")
     sub.add_parser("doctor")
 
+    pp = sub.add_parser("pose")
+    pp.add_argument("posture", nargs="?", choices=["sit", "stand", "board"])
+    pp.add_argument("--next", action="store_true", help="advance to the next posture")
+    sub.add_parser("posture-check")
+    sub.add_parser("posture-pause")
+    sub.add_parser("posture-resume")
+    psp = sub.add_parser("posture-status")
+    psp.add_argument("--json", action="store_true")
+    sub.add_parser("menubar")
+
     args = p.parse_args()
     handlers = {
         "notify": cmd_notify,
@@ -739,6 +1122,12 @@ def main() -> int:
         "install": cmd_install,
         "uninstall": cmd_uninstall,
         "doctor": cmd_doctor,
+        "pose": cmd_pose,
+        "posture-check": cmd_posture_check,
+        "posture-pause": cmd_posture_pause,
+        "posture-resume": cmd_posture_resume,
+        "posture-status": cmd_posture_status,
+        "menubar": cmd_menubar,
     }
     return handlers[args.cmd](args)
 

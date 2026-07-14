@@ -253,3 +253,63 @@ def test_notify_fires_when_last_completion_is_old(tmp_path, monkeypatch):
 
     assert d.read_state()["index"] == 1  # advanced
     assert len(calls) == 1  # notification fired
+
+
+# --- posture rotation -------------------------------------------------------
+
+PC = {
+    "rotation": ["sit", "stand", "sit", "board"],
+    "budgets_min": {"sit": 25, "stand": 12, "board": 18},
+}
+
+
+def test_next_posture_wraps_with_duplicate_sit():
+    assert d.next_posture({"idx": 0}, PC) == "stand"
+    assert d.next_posture({"idx": 1}, PC) == "sit"  # the second 'sit' slot
+    assert d.next_posture({"idx": 3}, PC) == "sit"  # wraps to idx 0
+
+
+def test_posture_remaining_positive_and_negative():
+    now = dt.datetime(2026, 7, 14, 13, 0)
+    recent = {"posture": "sit", "since": (now - dt.timedelta(minutes=10)).isoformat()}
+    assert d.posture_remaining(recent, PC, now) == 15  # 25 - 10
+    over = {"posture": "stand", "since": (now - dt.timedelta(minutes=20)).isoformat()}
+    assert d.posture_remaining(over, PC, now) == -8  # 12 - 20
+
+
+def test_in_work_window():
+    cfg = {"weekdays": [1, 2, 3, 4, 5], "hours": [9, 17]}
+    assert d.in_work_window(cfg, dt.datetime(2026, 7, 14, 10, 0)) is True  # Tue 10:00
+    assert d.in_work_window(cfg, dt.datetime(2026, 7, 14, 20, 0)) is False  # Tue 20:00
+    assert d.in_work_window(cfg, dt.datetime(2026, 7, 19, 10, 0)) is False  # Sun
+    assert (
+        d.in_work_window(
+            {"weekdays": [7], "hours": [9, 17]}, dt.datetime(2026, 7, 19, 10, 0)
+        )
+        is True
+    )
+
+
+def _isolate_posture(tmp_path, monkeypatch):
+    monkeypatch.setattr(d, "state_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(d.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(
+        d, "posture_cfg", lambda: {"enabled": True, **PC, "check_every_min": 5}
+    )
+
+
+def test_pose_advance_cycles_through_rotation(tmp_path, monkeypatch):
+    _isolate_posture(tmp_path, monkeypatch)
+    seq = []
+    for _ in range(5):
+        d.cmd_pose(argparse.Namespace(next=True, posture=None))
+        seq.append(d.read_posture()["posture"])
+    assert seq == ["stand", "sit", "board", "sit", "stand"]  # wraps after board
+
+
+def test_pose_set_manual_snaps_idx(tmp_path, monkeypatch):
+    _isolate_posture(tmp_path, monkeypatch)
+    d.cmd_pose(argparse.Namespace(next=False, posture="board"))
+    st = d.read_posture()
+    assert st["posture"] == "board"
+    assert st["idx"] == 3  # first rotation index matching 'board'

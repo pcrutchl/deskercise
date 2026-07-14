@@ -7,5 +7,11 @@
   "ignore_dnd": true,
   "sound": "Ping",
   "title": "Deskercise",
-  "state_dir": "~/.deskercise"
+  "state_dir": "~/.deskercise",
+  "posture": {
+    "enabled": true,
+    "rotation": ["sit", "stand", "sit", "board"],
+    "budgets_min": { "sit": 25, "stand": 12, "board": 18 },
+    "check_every_min": 5
+  }
 }
