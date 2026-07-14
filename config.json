@@ -1,0 +1,9 @@
+{
+  "_comment": "Schedule + notification settings. After editing, re-run: ./deskercise install (regenerates and reloads the launchd agent). Weekday uses launchd convention: 0/7=Sun, 1=Mon ... 6=Sat.",
+  "hours": [9, 10, 11, 12, 13, 14, 15, 16, 17],
+  "weekdays": [1, 2, 3, 4, 5],
+  "minute": 0,
+  "sound": "Ping",
+  "title": "Deskercise",
+  "state_dir": "~/.deskercise"
+}

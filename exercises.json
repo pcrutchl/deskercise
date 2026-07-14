@@ -1,0 +1,200 @@
+{
+  "_comment": "Deterministic rotation. Ordered to interleave categories: knee -> hip -> balance -> upper, repeating. Each segment is either timed ({label, seconds}) or rep-based ({label, reps}). work_friendly=true means you can keep working through it.",
+  "exercises": [
+    {
+      "id": "single_leg_mini_squat",
+      "name": "Single-leg mini squats",
+      "category": "knee",
+      "equipment": "desk edge for balance",
+      "work_friendly": false,
+      "cue": "Stand on one leg, rest fingertips on the desk. Do slow quarter-squats. Feel the muscle just above and inside the kneecap (VMO) working. Keep the knee tracking over the middle toes — do not let it cave inward.",
+      "segments": [
+        {"label": "Left leg", "reps": 10},
+        {"label": "Right leg", "reps": 10}
+      ],
+      "note": "Targets VMO + glute-medius control — the muscles that stabilize the kneecap for cycling."
+    },
+    {
+      "id": "stealth_hip_flexor",
+      "name": "Standing 'stealth' hip-flexor stretch",
+      "category": "hip",
+      "equipment": "none",
+      "work_friendly": true,
+      "cue": "Split stance, one foot forward one back, both pointing forward. TUCK THE PELVIS (flatten your lower back) and squeeze the back-side glute, then shift weight slowly forward until you feel a stretch in the FRONT of the back hip — not the quad. You can keep reading/typing through this.",
+      "segments": [
+        {"label": "Right leg back", "seconds": 40},
+        {"label": "Left leg back", "seconds": 40}
+      ],
+      "note": "Pelvic tuck is everything — arched back = the psoas stays slack and you stretch nothing useful."
+    },
+    {
+      "id": "single_leg_board",
+      "name": "Single-leg stand on balance board",
+      "category": "balance",
+      "equipment": "FluidStance board",
+      "work_friendly": false,
+      "cue": "On the board, feet centered. Lift one foot an inch. Eyes forward, soft knee, breathe. Rest a fingertip on the desk only if you start to tip.",
+      "segments": [
+        {"label": "Left leg", "seconds": 30},
+        {"label": "Right leg", "seconds": 30}
+      ],
+      "note": "Progress toward 45–60s and less hand support. Once solid, try eyes half-closed."
+    },
+    {
+      "id": "pvc_pass_throughs",
+      "name": "PVC shoulder pass-throughs (dislocates)",
+      "category": "upper",
+      "equipment": "7' PVC pipe",
+      "work_friendly": false,
+      "cue": "Wide overhand grip on the pipe. Keep arms straight and slowly raise it overhead and behind you, then back to the front. Go only as wide as you need to keep the elbows locked; narrow the grip over time as shoulders open up.",
+      "segments": [
+        {"label": "Slow, controlled reps", "reps": 12}
+      ],
+      "note": "Thoracic + shoulder mobility to counter the cycling/desk hunch."
+    },
+    {
+      "id": "ulnar_nerve_glide",
+      "name": "Ulnar nerve glide (nerve floss)",
+      "category": "nerve",
+      "equipment": "none",
+      "work_friendly": false,
+      "cue": "For the numb hand: arm out to the side, elbow straight, palm up. Bend the elbow and rotate so the palm turns toward your face; curl thumb + index into a ring and bring it up to frame your eye like a monocle, other fingers pointing down. You should feel a GENTLE pull or tingle in the ring + pinky finger — back off before it becomes painful. Return slowly and repeat.",
+      "segments": [
+        {"label": "Numb side (or right)", "reps": 10},
+        {"label": "Other side (or left)", "reps": 10}
+      ],
+      "note": "For cyclist's/handlebar palsy — flosses the ulnar nerve so it glides instead of catching. Keep it gentle; nerve work should never be forced. If numbness persists for hours/days, weakens grip, or wastes the thumb pad, see a hand specialist."
+    },
+    {
+      "id": "wall_sit",
+      "name": "Wall sit",
+      "category": "knee",
+      "equipment": "wall",
+      "work_friendly": false,
+      "cue": "Back flat against the wall, feet shoulder-width and a step out from the wall. Slide down until knees are ~90° (shins vertical). Hold. Weight through the heels.",
+      "segments": [
+        {"label": "Hold", "seconds": 45}
+      ],
+      "note": "Isometric quad/VMO builder. Shorten the hold if the knees complain."
+    },
+    {
+      "id": "standing_hip_cars",
+      "name": "Standing hip CARs (controlled circles)",
+      "category": "hip",
+      "equipment": "desk edge for balance",
+      "work_friendly": false,
+      "cue": "Stand on one leg (hold the desk). Lift the other knee to hip height and draw the biggest slow circle you can with the knee. Move only at the hip; keep the rest of you still.",
+      "segments": [
+        {"label": "Left leg", "steps": [
+          {"cue": "circle knee forward → out → back", "seconds": 15},
+          {"cue": "reverse the direction", "seconds": 15}
+        ]},
+        {"label": "Right leg", "steps": [
+          {"cue": "circle knee forward → out → back", "seconds": 15},
+          {"cue": "reverse the direction", "seconds": 15}
+        ]}
+      ],
+      "note": "Actively drives end-range hip rotation that cycling never asks for."
+    },
+    {
+      "id": "board_weight_shifts",
+      "name": "Balance-board weight shifts",
+      "category": "balance",
+      "equipment": "FluidStance board",
+      "work_friendly": true,
+      "cue": "Both feet on the board, controlled not wobbly. Keep working while you do it; let your feet do the fidgeting.",
+      "segments": [
+        {"label": "Weight shifts", "steps": [
+          {"cue": "tilt edge to edge", "seconds": 20},
+          {"cue": "rock front to back", "seconds": 20},
+          {"cue": "trace slow circles", "seconds": 20}
+        ]}
+      ],
+      "note": "Low-effort ankle/knee proprioception you can run during a call."
+    },
+    {
+      "id": "pvc_overhead_side_bend",
+      "name": "PVC overhead reach + side bend",
+      "category": "upper",
+      "equipment": "7' PVC pipe",
+      "work_friendly": false,
+      "cue": "Hold the pipe overhead, hands wide, arms straight. Reach tall, then bend slowly to one side feeling the stretch down the ribs and lat. Hold, return, then the other side.",
+      "segments": [
+        {"label": "Bend left", "seconds": 30},
+        {"label": "Bend right", "seconds": 30}
+      ],
+      "note": "Opens the lats and side-body that shorten in the cycling/desk fold."
+    },
+    {
+      "id": "gyro_ball_forearm",
+      "name": "Gyro ball forearm spin",
+      "category": "nerve",
+      "equipment": "gyro ball / Powerball",
+      "work_friendly": false,
+      "cue": "Spin up the gyro ball and keep it buzzing with small wrist circles. Grip firm but not white-knuckled. Ease off on the affected side if it aggravates the numbness.",
+      "segments": [
+        {"label": "Right hand", "steps": [
+          {"cue": "palm down", "seconds": 15},
+          {"cue": "palm up", "seconds": 15},
+          {"cue": "thumb up", "seconds": 15}
+        ]},
+        {"label": "Left hand", "steps": [
+          {"cue": "palm down", "seconds": 15},
+          {"cue": "palm up", "seconds": 15},
+          {"cue": "thumb up", "seconds": 15}
+        ]}
+      ],
+      "note": "Builds forearm + grip endurance so you can ride with a relaxed grip and less sustained pressure on the ulnar nerve — the strengthening complement to the nerve glide."
+    },
+    {
+      "id": "ext_rotated_half_squats",
+      "name": "Externally-rotated half squats",
+      "category": "knee",
+      "equipment": "none",
+      "work_friendly": false,
+      "cue": "Feet shoulder-width, toes and knees turned outward ~30°. Squat halfway down, then rise slowly, deliberately driving the knees outward and feeling the inner-quad (VMO) pull you up.",
+      "segments": [
+        {"label": "Slow reps", "reps": 12}
+      ],
+      "note": "The turned-out stance biases load toward the VMO."
+    },
+    {
+      "id": "standing_figure4",
+      "name": "Standing figure-4 hip stretch",
+      "category": "hip",
+      "equipment": "desk edge for balance",
+      "work_friendly": false,
+      "cue": "Hold the desk. Cross one ankle over the opposite thigh just above the knee, then sit the hips back into a shallow one-leg squat until you feel the stretch in the outer hip/glute. Keep the crossed foot flexed.",
+      "segments": [
+        {"label": "Left ankle crossed", "seconds": 30},
+        {"label": "Right ankle crossed", "seconds": 30}
+      ],
+      "note": "Targets the glute-med/piriformis — the outer-hip stabilizers cyclists neglect."
+    },
+    {
+      "id": "two_foot_board_hold",
+      "name": "Two-foot balance-board hold",
+      "category": "balance",
+      "equipment": "FluidStance board",
+      "work_friendly": true,
+      "cue": "Both feet on the board, find and hold your center — minimal movement, quiet ankles. Keep working; the goal is a still, engaged stance rather than a fidget.",
+      "segments": [
+        {"label": "Steady hold", "seconds": 90}
+      ],
+      "note": "Baseline stability — master this before chasing longer single-leg holds."
+    },
+    {
+      "id": "pvc_thoracic_rotation",
+      "name": "PVC thoracic rotations",
+      "category": "upper",
+      "equipment": "7' PVC pipe",
+      "work_friendly": false,
+      "cue": "Rest the pipe across the back of your shoulders, hands draped over it. Stand tall, brace the core, and rotate your upper back slowly left and right — turn from the mid-back, keep the hips facing forward.",
+      "segments": [
+        {"label": "Rotate left", "reps": 8},
+        {"label": "Rotate right", "reps": 8}
+      ],
+      "note": "Restores the spinal rotation that hours in one posture erase."
+    }
+  ]
+}

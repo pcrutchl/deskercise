@@ -1,0 +1,7 @@
+# Local runtime state lives in ~/.deskercise, but ignore these if anyone points
+# state_dir at the repo, plus the usual noise.
+.deskercise/
+*.log
+__pycache__/
+*.pyc
+.DS_Store

@@ -1,0 +1,11 @@
+#!/bin/bash
+# Invoked by terminal-notifier's -execute when the notification is clicked.
+# Opens a Terminal.app window and runs the guided session for the pending exercise.
+DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+/usr/bin/osascript <<EOF
+tell application "Terminal"
+    activate
+    do script "clear; python3 '$DIR/deskercise.py' session; exit"
+end tell
+EOF
