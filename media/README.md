@@ -15,17 +15,14 @@ The `id` is the first field of each entry in `../exercises.json`. Current ids:
 | --- | --- |
 | `single_leg_mini_squat` | Single-leg mini squats |
 | `stealth_hip_flexor` | Standing 'stealth' hip-flexor stretch |
-| `single_leg_board` | Single-leg stand on balance board |
 | `pvc_pass_throughs` | PVC shoulder pass-throughs |
 | `ulnar_nerve_glide` | Ulnar nerve glide |
 | `wall_sit` | Wall sit |
 | `standing_hip_cars` | Standing hip CARs |
-| `board_weight_shifts` | Balance-board weight shifts |
 | `pvc_overhead_side_bend` | PVC overhead reach + side bend |
 | `gyro_ball_forearm` | Gyro ball forearm spin |
 | `ext_rotated_half_squats` | Externally-rotated half squats |
 | `standing_figure4` | Standing figure-4 hip stretch |
-| `two_foot_board_hold` | Two-foot balance-board hold |
 | `board_calf_stretch` | Balance-board calf stretch |
 | `pvc_thoracic_rotation` | PVC thoracic rotations |
 

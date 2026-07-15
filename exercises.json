@@ -28,19 +28,6 @@
       "note": "Pelvic tuck is everything — arched back = the psoas stays slack and you stretch nothing useful."
     },
     {
-      "id": "single_leg_board",
-      "name": "Single-leg stand on balance board",
-      "category": "balance",
-      "equipment": "FluidStance board",
-      "work_friendly": false,
-      "cue": "On the board, feet centered. Lift one foot an inch. Eyes forward, soft knee, breathe. Rest a fingertip on the desk only if you start to tip.",
-      "segments": [
-        {"label": "Left leg", "seconds": 30},
-        {"label": "Right leg", "seconds": 30}
-      ],
-      "note": "Progress toward 45–60s and less hand support. Once solid, try eyes half-closed."
-    },
-    {
       "id": "pvc_pass_throughs",
       "name": "PVC shoulder pass-throughs (dislocates)",
       "category": "upper",
@@ -96,22 +83,6 @@
         ]}
       ],
       "note": "Actively drives end-range hip rotation that cycling never asks for."
-    },
-    {
-      "id": "board_weight_shifts",
-      "name": "Balance-board weight shifts",
-      "category": "balance",
-      "equipment": "FluidStance board",
-      "work_friendly": true,
-      "cue": "Both feet on the board, controlled not wobbly. Keep working while you do it; let your feet do the fidgeting.",
-      "segments": [
-        {"label": "Weight shifts", "steps": [
-          {"cue": "tilt edge to edge", "seconds": 20},
-          {"cue": "rock front to back", "seconds": 20},
-          {"cue": "trace slow circles", "seconds": 20}
-        ]}
-      ],
-      "note": "Low-effort ankle/knee proprioception you can run during a call."
     },
     {
       "id": "pvc_overhead_side_bend",
@@ -172,18 +143,6 @@
         {"label": "Right ankle crossed", "seconds": 30}
       ],
       "note": "Targets the glute-med/piriformis — the outer-hip stabilizers cyclists neglect."
-    },
-    {
-      "id": "two_foot_board_hold",
-      "name": "Two-foot balance-board hold",
-      "category": "balance",
-      "equipment": "FluidStance board",
-      "work_friendly": true,
-      "cue": "Both feet on the board, find and hold your center — minimal movement, quiet ankles. Keep working; the goal is a still, engaged stance rather than a fidget.",
-      "segments": [
-        {"label": "Steady hold", "seconds": 90}
-      ],
-      "note": "Baseline stability — master this before chasing longer single-leg holds."
     },
     {
       "id": "board_calf_stretch",
