@@ -480,8 +480,9 @@ def run_session(ex: dict) -> None:
         show_image(img)
     print()
 
+    prep = ex.get("prep_seconds", 8)
     try:
-        for n in range(8, 0, -1):
+        for n in range(prep, 0, -1):
             print(
                 f"\r  {C.DIM}read the cue, get into position… {n}{C.RESET}   ",
                 end="",

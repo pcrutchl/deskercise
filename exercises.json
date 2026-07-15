@@ -131,17 +131,18 @@
       "category": "nerve",
       "equipment": "gyro ball / Powerball",
       "work_friendly": false,
-      "cue": "Spin up the gyro ball and keep it buzzing with small wrist circles. Grip firm but not white-knuckled. Ease off on the affected side if it aggravates the numbness.",
+      "prep_seconds": 20,
+      "cue": "Spin the gyro ball up to a strong, steady buzz before the timer starts, then keep it going with small wrist circles. Grip firm but not white-knuckled. Ease off on the affected side if it aggravates the numbness.",
       "segments": [
         {"label": "Right hand", "steps": [
+          {"cue": "thumb up", "seconds": 15},
           {"cue": "palm down", "seconds": 15},
-          {"cue": "palm up", "seconds": 15},
-          {"cue": "thumb up", "seconds": 15}
+          {"cue": "palm up", "seconds": 15}
         ]},
         {"label": "Left hand", "steps": [
+          {"cue": "thumb up", "seconds": 15},
           {"cue": "palm down", "seconds": 15},
-          {"cue": "palm up", "seconds": 15},
-          {"cue": "thumb up", "seconds": 15}
+          {"cue": "palm up", "seconds": 15}
         ]}
       ],
       "note": "Builds forearm + grip endurance so you can ride with a relaxed grip and less sustained pressure on the ulnar nerve — the strengthening complement to the nerve glide."
