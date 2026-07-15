@@ -71,6 +71,7 @@
       "category": "knee",
       "equipment": "wall",
       "work_friendly": false,
+      "prep_seconds": 13,
       "cue": "Back flat against the wall, feet shoulder-width and a step out from the wall. Slide down until knees are ~90° (shins vertical). Hold. Weight through the heels.",
       "segments": [
         {"label": "Hold", "seconds": 45}
