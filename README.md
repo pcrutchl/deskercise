@@ -17,13 +17,15 @@ Built around a specific setup: powered standing desk, FluidStance balance board,
   meeting starts — all configurable in `config.json`).
 - `notify` picks the next exercise in a **deterministic rotation** that cycles
   evenly through knee → hip → balance → upper-body → hand/forearm, and fires a
-  clickable macOS notification via `terminal-notifier`. Selection is
-  **posture-aware** (see below): when you're upright it serves a standing/board
-  exercise; when you're sitting it rests (with occasional seated nerve work).
-- **Clicking the notification** opens a right-sized **iTerm2** window with the
-  guided session: the instructions, then a **visual countdown** for each timed
-  hold (with discrete sub-timers, e.g. "palm down 15s → palm up 15s → thumb up
-  15s"), or a press-Enter-when-done prompt for rep-based moves. The window
+  macOS notification via `terminal-notifier`. Selection is **posture-aware** (see
+  below): when you're upright it serves a standing/board exercise; when you're
+  sitting it rests (with occasional seated nerve work).
+- **Start the session from the menu bar** — the xbar **Do it now** item (or run
+  `desknow`). On macOS 26+ the notification itself is just a reminder; its click
+  action no longer works (see *Posture rotation* below). The session opens a
+  right-sized **iTerm2** window: the instructions, then a **visual countdown** for
+  each timed hold (with discrete sub-timers, e.g. "palm down 15s → palm up 15s →
+  thumb up 15s"), or a press-Enter-when-done prompt for rep-based moves. The window
   **closes itself** when the session ends. (iTerm2 is used for its scripting +
   inline-image support; install it via `brew install --cask iterm2`.)
 - Finishing logs a completion. `stats` shows today's tally, your streak, and
@@ -148,9 +150,14 @@ interleaved between the two upright modes.
 
 - A second launchd agent (`posture-check`, every `check_every_min` — default
   **2 min** — during work hours) fires a notification when the current posture
-  exceeds its dwell budget: *"stand 14m → switch to sit."* **Clicking it advances
-  the state.** Only the first nudge of an over-budget episode plays a sound;
-  re-nudges persist visually but stay silent.
+  exceeds its dwell budget: *"stand 14m → switch to sit."* Only the first nudge of
+  an over-budget episode plays a sound; re-nudges persist visually but stay silent.
+- **Act via the menu bar, not the notification.** On **macOS 26+**, notification
+  *click actions are dead* (terminal-notifier uses the retired `NSUserNotification`
+  API — the alert still shows, but clicking it runs nothing). So the nudge is just
+  a **reminder**; you advance/switch from the **xbar menu** (Advance / Set) or
+  `deskercise pose …`. Same for exercises: the notification points you to the
+  menu-bar **Do it now** (or run `desknow`).
 - There's no sensor to detect sit/stand on a dumb desk (and Apple Silicon Macs
   have no accelerometer anyway), so state is **confirm-on-transition**: you click
   the nudge, or run `deskercise pose <sit|stand|board>` if you go off-script.

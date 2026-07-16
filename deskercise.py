@@ -276,7 +276,8 @@ def _serve_exercise(ex: dict) -> None:
     launcher = os.path.join(SCRIPT_DIR, "bin", "launch-session")
     duration = human_duration(ex)
     subtitle = f"{CATEGORY_LABEL.get(ex['category'], ex['category'])} · {duration}"
-    message = f"{ex['name']} — click to start the guided timer"
+    # macOS 26 killed terminal-notifier's click-to-run, so point at the menu bar.
+    message = f"{ex['name']} — ▸ menu bar: Do it now"
 
     if tn is None:
         script = (
@@ -465,6 +466,7 @@ def show_image(path: str, height_cells: int = 11) -> None:
 
 
 def run_session(ex: dict) -> None:
+    _clear_exercise_notification()  # opening the session dismisses the reminder
     clear()
     cat = CATEGORY_LABEL.get(ex["category"], ex["category"])
     print()
@@ -1050,6 +1052,13 @@ def _clear_posture_notification() -> None:
     tn = terminal_notifier_path()
     if tn is not None:
         subprocess.run([tn, "-remove", POSTURE_LABEL], capture_output=True)
+
+
+def _clear_exercise_notification() -> None:
+    """Remove the exercise reminder (once you've opened/done the session)."""
+    tn = terminal_notifier_path()
+    if tn is not None:
+        subprocess.run([tn, "-remove", LABEL], capture_output=True)
 
 
 def _set_posture(
