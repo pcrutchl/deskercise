@@ -511,6 +511,9 @@ def run_session(ex: dict) -> None:
         print()
         log_event("skipped", ex)
         advance_pool_pointer(ex)  # explicit skip counts as engaging — move on
+        _st = read_state()
+        _st["pending"] = None  # offered exercise dealt with
+        write_state(_st)
         print(f"\n  {C.YELLOW}skipped — logged. no worries.{C.RESET}")
         _linger(2)
         return
@@ -518,9 +521,9 @@ def run_session(ex: dict) -> None:
     log_event("completed", ex)
     advance_pool_pointer(ex)
     _st = read_state()
-    if _st.get("owed"):  # doing one satisfies any owed exercise
-        _st["owed"] = False
-        write_state(_st)
+    _st["pending"] = None  # offered exercise done — 'Do it now' serves the next
+    _st["owed"] = False  # doing one satisfies any owed exercise
+    write_state(_st)
     print()
     print(f"  {C.GREEN}{C.BOLD}✓ done — logged.{C.RESET}")
     if ex.get("note"):
@@ -1219,7 +1222,11 @@ def cmd_menubar(args) -> int:
     p_elapsed, p_budget, p_remaining, p_next = _posture_lines(st, pc, now)
 
     cfg = load_config()
-    nxt_ex = peek_next(load_exercises())
+    # Show (and let "Do it now" run) the exercise the notification actually
+    # offered — pending — falling back to the next upright when nothing's pending.
+    exs = load_exercises()
+    _pend = read_state().get("pending")
+    nxt_ex = (find_by_id(exs, _pend) if _pend else None) or peek_next(exs)
     fires = next_fire_times(cfg, now, 1)
     ex_rem = int((fires[0] - now).total_seconds() // 60) if fires else None
     will_skip = bool(
@@ -1265,7 +1272,7 @@ def cmd_menubar(args) -> int:
         action(f"Set: {p}", "pose", p)
 
     print("---")
-    print(f"Next upright exercise: {nxt_ex['name']}")
+    print(f"Next: {nxt_ex['name']}")
     if owed:
         print("⚠︎ owed — stand (or Advance) to do it now")
     elif not current_posture_is_upright():
@@ -1274,7 +1281,11 @@ def cmd_menubar(args) -> int:
         when = fires[0].strftime("%-I:%M")
         note = "  ⚠︎ will skip (moved recently)" if will_skip else ""
         print(f"next check in {_fmt_dur(ex_rem)} ({when}){note}")
-    print(f'Do it now | shell="{launcher}" param1="now" terminal=false refresh=true')
+    # "session" (not "now") so this runs the offered/pending exercise, matching
+    # the notification; falls back to the next upright when nothing's pending.
+    print(
+        f'Do it now | shell="{launcher}" param1="session" terminal=false refresh=true'
+    )
     print("---")
     print("Deskercise")
     return 0

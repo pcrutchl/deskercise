@@ -362,6 +362,29 @@ def test_fire_owed_exercise_when_upright(tmp_path, monkeypatch):
     assert len(calls) == 1
 
 
+def test_do_it_now_runs_the_pending_offered_exercise(tmp_path, monkeypatch):
+    # xbar "Do it now" (session mode) must run what the notification offered
+    # (pending), not recompute the next upright — that was the mismatch bug.
+    _isolate_state(tmp_path, monkeypatch)
+    captured = {}
+    monkeypatch.setattr(d, "run_session", lambda ex: captured.__setitem__("ex", ex))
+    d.write_state(
+        {"up_idx": 4, "seat_idx": 1, "pending": "gyro_ball_forearm", "owed": False}
+    )
+    d.cmd_session(argparse.Namespace(id=None))
+    assert captured["ex"]["id"] == "gyro_ball_forearm"
+
+
+def test_do_it_now_falls_back_to_next_upright_when_no_pending(tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    up, _ = d.exercise_pools(d.load_exercises())
+    captured = {}
+    monkeypatch.setattr(d, "run_session", lambda ex: captured.__setitem__("ex", ex))
+    d.write_state({"up_idx": 4, "seat_idx": 0, "pending": None, "owed": False})
+    d.cmd_session(argparse.Namespace(id=None))
+    assert captured["ex"]["id"] == up[4]["id"]
+
+
 def test_fire_owed_exercise_noop_when_sitting(tmp_path, monkeypatch):
     calls = _isolate_state(tmp_path, monkeypatch, posture="sit")
     monkeypatch.setattr(d, "in_work_window", lambda cfg, now: True)
